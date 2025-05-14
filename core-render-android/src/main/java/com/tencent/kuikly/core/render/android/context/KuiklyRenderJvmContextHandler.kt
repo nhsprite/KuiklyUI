@@ -17,6 +17,7 @@ package com.tencent.kuikly.core.render.android.context
 
 import com.tencent.kuikly.core.IKuiklyCoreEntry
 import com.tencent.kuikly.core.manager.BridgeManager
+import com.tencent.kuikly.core.render.android.core.IKuiklyRenderCore
 import com.tencent.kuikly.core.render.android.css.ktx.isMainThread
 import com.tencent.kuikly.core.render.android.exception.ErrorReason
 
@@ -25,7 +26,7 @@ import com.tencent.kuikly.core.render.android.exception.ErrorReason
  */
 class KuiklyRenderJvmContextHandler : KuiklyRenderCommonContextHandler(), IKuiklyCoreEntry.Delegate {
 
-    private val kuiklyCoreEntry = newKuiklyCoreEntryInstance()
+    private val kuiklyCoreEntry = getKuiklyCoreEntryInstance()
 
     init {
         kuiklyCoreEntry.delegate = this
@@ -92,13 +93,15 @@ class KuiklyRenderJvmContextHandler : KuiklyRenderCommonContextHandler(), IKuikl
     companion object {
 
         private val kuiklyClass = Class.forName("com.tencent.kuikly.core.android.KuiklyCoreEntry")
+        private lateinit var kuiklyCoreEntry: IKuiklyCoreEntry
 
-        fun newKuiklyCoreEntryInstance(): IKuiklyCoreEntry {
-            return kuiklyClass.newInstance() as IKuiklyCoreEntry
+        fun getKuiklyCoreEntryInstance(): IKuiklyCoreEntry {
+            kuiklyCoreEntry = kuiklyClass.newInstance() as IKuiklyCoreEntry
+            return kuiklyCoreEntry
         }
 
         fun isPageExist(pageName: String): Boolean {
-            newKuiklyCoreEntryInstance().triggerRegisterPages()
+            getKuiklyCoreEntryInstance().triggerRegisterPages()
             return BridgeManager.isPageExist(pageName)
         }
     }

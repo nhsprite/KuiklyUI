@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,7 +23,6 @@ import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import kotlin.math.max
 import kotlin.math.min
 
-
 /**
  * 创建一个 ImageView 实例并添加到视图容器中。
  * @param init 一个 ImageView.() -> Unit 函数，用于初始化 ImageView 的属性和子视图。
@@ -31,12 +30,11 @@ import kotlin.math.min
 fun ViewContainer<*, *>.Image(init: ImageView.() -> Unit) {
     val imageView = createViewFromRegister(ViewConst.TYPE_IMAGE_CLASS_NAME) as? ImageView
     if (imageView != null) {
-        addChild(ImageView(), init)
+        addChild(imageView, init)
     } else {
         addChild(ImageView(), init)
     }
 }
-
 
 open class ImageAttr : Attr(), IImageAttr {
     internal var shouldWrapper = false
@@ -77,6 +75,31 @@ open class ImageAttr : Attr(), IImageAttr {
     }
 
     /**
+     * 设置图片源(支持http&base64&宿主扩展能力)。
+     * @param src 图片源路径。
+     * @param imageParams 图片额外参数
+     * @param isDotNineImage 是否为 .9 图。
+     * @return 返回 ImageAttr 以支持链式调用。
+     */
+    override fun src(src: String, imageParams: JSONObject?, isDotNineImage: Boolean): IImageAttr {
+        if (imageParams != null) {
+            ImageConst.IMAGE_PARAMS with imageParams.toString()
+        }
+        return src(src, isDotNineImage)
+    }
+
+    /**
+     * 设置图片源。
+     * @param uri ImageUri 对象。
+     * @param imageParams 图片额外参数
+     * @param isDotNineImage 是否为 .9 图。
+     * @return 返回 IImageAttr 以支持链式调用。
+     */
+    override fun src(uri: ImageUri, imageParams: JSONObject?, isDotNineImage: Boolean): IImageAttr {
+        return src(uri.toUrl(getPager().pageName), imageParams, isDotNineImage)
+    }
+
+    /**
      * 设置图片占位图。
      * @param placeholder 占位图路径。
      * @return 返回 ImageAttr 以支持链式调用。
@@ -108,6 +131,14 @@ open class ImageAttr : Attr(), IImageAttr {
         } else {
             ImageConst.TINT_COLOR with color.toString()
         }
+        return this
+    }
+
+    /**
+     * 设置图片组件鸿蒙平台上是否可以拖动
+     */
+    fun dragEnable(dragEnable: Boolean): Attr {
+        ImageConst.DRAG_ENABLE with dragEnable.toInt()
         return this
     }
 
@@ -225,7 +256,6 @@ class ImageEvent : Event() {
     }
 }
 
-
 // 图片分辨率参数
 data class LoadResolutionParams(
     val width: Int, // 分辨率实际像素宽大小
@@ -270,7 +300,6 @@ class ImageView : DeclarativeBaseView<ImageAttr, ImageEvent>() {
     }
 }
 
-
 data class LoadSuccessParams(
     val src: String // 对应属性的 src
 ) {
@@ -307,9 +336,12 @@ object ImageConst {
     const val BASE64_ICON_PREFIX = "data:image"
     const val BASE64_CACHE_KEY_PREFIX = BASE64_ICON_PREFIX + "_Md5_"
     const val DOT_NINE_IMAGE = "dotNineImage"
+    const val IMAGE_PARAMS = "imageParams"
     const val CAP_INSETS = "capInsets"
 
     const val RESIZE_MODE_COVER = "cover"
     const val RESIZE_MODE_CONTAIN = "contain"
     const val RESIZE_MODE_STRETCH = "stretch"
+
+    const val DRAG_ENABLE = "dragEnable"
 }

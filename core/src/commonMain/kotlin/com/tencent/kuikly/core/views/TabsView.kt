@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,13 +15,20 @@
 
 package com.tencent.kuikly.core.views
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Animation
+import com.tencent.kuikly.core.base.Attr
+import com.tencent.kuikly.core.base.ContainerAttr
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewConst
+import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.base.ViewRef
+import com.tencent.kuikly.core.base.domChildren
 import com.tencent.kuikly.core.base.event.Event
+import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.layout.Frame
 import com.tencent.kuikly.core.layout.undefined
 import com.tencent.kuikly.core.layout.valueEquals
-import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.pager.IPagerLayoutEventObserver
 import com.tencent.kuikly.core.reactive.handler.observable
 import kotlin.math.abs
@@ -49,8 +56,6 @@ class TabsView : ListView<TabsAttr, TabsEvent>(), IPagerLayoutEventObserver {
         getPager().removePagerLayoutEventObserver(this)
     }
 
-
-
     private fun contentViewFrameDidChanged() {
         updateIndicatorPositionIfNeed()
 
@@ -64,7 +69,7 @@ class TabsView : ListView<TabsAttr, TabsEvent>(), IPagerLayoutEventObserver {
         if (contentViewFrame === Frame.zero) {
             return
         }
-        val tabItems = contentView?.domChildren()?.filter { it is TabItemView } ?: arrayListOf()
+        val tabItems = contentView?.domChildren()?.filter { it is TabItemView } ?: fastArrayListOf()
         if (tabItems.isEmpty()) {
             this.indicatorViewRef?.view?.getViewAttr()?.visibility(false)
             return
@@ -86,8 +91,6 @@ class TabsView : ListView<TabsAttr, TabsEvent>(), IPagerLayoutEventObserver {
             width = letItemFrame.width + (rightItemFrame.width - letItemFrame.width) * betweenProgress
             scrollProgress = it.offsetX / (it.contentWidth - it.viewWidth)
         }
-
-
 
         val selectedItem = tabItems[selectedIndex] as? TabItemView
         var itemSelectedIndexDidChanged = false
@@ -140,7 +143,6 @@ class TabsView : ListView<TabsAttr, TabsEvent>(), IPagerLayoutEventObserver {
         val roundedValue = round(this)
         return abs(this - roundedValue) <= tolerance
     }
-
 
     override fun willInit() {
         super.willInit()
@@ -200,6 +202,9 @@ class TabsAttr : ListAttr() {
      * 注：该参数必须设置，才能让tabs组件正常使用，该参数来自PageList等Scroller容器组件中监听scroll事件的参数
      */
     fun scrollParams(scrollParams: ScrollParams) {
+        if (scrollParams == this.scrollParams) {
+            return
+        }
         this.scrollParams = scrollParams
         (this.view() as? TabsView)?.scrollParamsDidChanged()
     }
@@ -229,9 +234,7 @@ class TabsAttr : ListAttr() {
     }
 }
 
-class TabsEvent : ListEvent() {
-
-}
+class TabsEvent : ListEvent()
 
 /*
  * Tabs组件（与分页列表组件配套使用）
@@ -239,8 +242,6 @@ class TabsEvent : ListEvent() {
 fun ViewContainer<*, *>.Tabs(init: TabsView.() -> Unit) {
    addChild(TabsView(), init)
 }
-
-
 
 /*
  * 与TabsView配套的TabItemView
@@ -254,7 +255,7 @@ fun ViewContainer<*, *>.TabItem(init: TabItemView.(newState : TabItemView.ItemSt
 
 class TabItemView : ViewContainer<TabItemAttr, TabItemEvent>() {
     internal var state = ItemState()
-    class ItemState {
+    inner class ItemState {
         /// 是否选中（用于更新选中高亮UI）
         var selected by observable(false)
     }
@@ -263,11 +264,6 @@ class TabItemView : ViewContainer<TabItemAttr, TabItemEvent>() {
     override fun viewName(): String = ViewConst.TYPE_VIEW
 }
 
+class TabItemAttr : ContainerAttr()
 
-class TabItemAttr : ContainerAttr() {
-
-}
-
-class TabItemEvent : Event() {
-
-}
+class TabItemEvent : Event()

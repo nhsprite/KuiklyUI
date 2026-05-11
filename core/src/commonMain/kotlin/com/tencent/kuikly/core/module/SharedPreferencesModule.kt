@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -83,13 +83,12 @@ class SharedPreferencesModule : Module() {
     }
 
     fun getObject(key: String): JSONObject? {
-        val value = getItem(key);
+        val value = getItem(key)
         if (value.isNotEmpty()) {
             return JSONObject(value)
         }
         return null
     }
-
 
     fun getItem(key: String): String {
         return toNative(
@@ -100,8 +99,6 @@ class SharedPreferencesModule : Module() {
             true
         ).toString()
     }
-
-
 
     fun setItem(key: String, value: String) {
         val params = JSONObject()

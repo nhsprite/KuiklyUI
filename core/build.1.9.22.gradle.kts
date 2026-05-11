@@ -6,6 +6,7 @@ plugins {
     kotlin("native.cocoapods")
     id("com.android.library")
     id("maven-publish")
+    signing
 }
 
 group = MavenConfig.GROUP
@@ -26,38 +27,75 @@ publishing {
         } else {
             mavenLocal()
         }
+
+        publications.withType<MavenPublication>().configureEach {
+            pom.configureMavenCentralMetadata()
+            signPublicationIfKeyPresent(project)
+        }
     }
 }
 
 kotlin {
-    // targetes
-    jvm()
 
     androidTarget {
+        compilations.all {
+            kotlinOptions {
+                moduleName = "${project.group}.${project.name}"
+            }
+        }
         publishLibraryVariantsGroupedByFlavor = true
         publishLibraryVariants("release")
+    }
+
+    js(IR) {
+        moduleName = "KuiklyCore-core"
+        browser {
+            webpackTask {
+                outputFileName = "${moduleName}.js" // 最后输出的名字
+            }
+
+            commonWebpackConfig {
+                output?.library = null // 不导出全局对象，只导出必要的入口函数
+            }
+        }
+        binaries.executable() //将kotlin.js与kotlin代码打包成一份可直接运行的js文件
     }
 
     iosSimulatorArm64()
     iosX64()
     iosArm64()
+    macosX64()
+    macosArm64()
 
-
-    // sourceSets
-    val commonMain by sourceSets.getting
-
-    sourceSets.iosMain {
-        dependsOn(commonMain)
+    sourceSets {
+        all {
+            languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+        }
     }
 
-//    val iosMain by sourceSets.creating {
-//        dependsOn(commonMain)
-//    }
+    // sourceSets
+    sourceSets {
+        val commonMain by getting
+        val appleMain by sourceSets.creating {
+            dependsOn(commonMain)
+        }
+        val iosMain by sourceSets.creating {
+            dependsOn(appleMain)
+        }
+        val macosMain by sourceSets.creating {
+            dependsOn(appleMain)
+        }
+    }
+
     targets.withType<KotlinNativeTarget> {
-        val mainSourceSets = this.compilations.getByName("main").defaultSourceSet
+        val appleMain by sourceSets.getting
         when {
             konanTarget.family.isAppleFamily -> {
-                mainSourceSets.dependsOn(sourceSets.iosMain.get())
+                val main by compilations.getting
+                main.defaultSourceSet.dependsOn(appleMain)
+                val kuikly by main.cinterops.creating {
+                    defFile(project.file("src/appleMain/iosInterop/cinterop/ios.def"))
+                }
             }
         }
     }
@@ -77,6 +115,7 @@ kotlin {
 
 android {
     compileSdk = 30
+    namespace = "com.tencent.kuikly.core"
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     defaultConfig {
         minSdk = 21

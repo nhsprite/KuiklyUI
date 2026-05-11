@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,15 +22,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, KRLoadStage) {
     KRLoadStage_initView          = 0,      // vc从init到 调用loadview
-    KRLoadStage_fetchContextCode  = 1,      // fetchContextCode
-    KRLoadStage_initRenderContext   = 2,    // 初始化renderContext
-    KRLoadStage_pageBuild   = 3,                // 构建业务 shadow tree 耗时，会执行各view的body函数
-    KRLoadStage_pageLayout  = 4,                // 页面布局总耗时
-    KRLoadStage_createPage    = 5,          // kotlin pager 页面创建（包括init、build、layout）
-    KRLoadStage_fristPaint  = 6,            // 启动-首帧渲染出来总耗时
-    KRLoadStage_createInstance = 7,         // 初始化环境后，createPage结束
-    KRLoadStage_newPage = 8,                // kotlin侧执行newPage耗时
-    KRLoadStage_renderFP = 9,               // createPage结束到首帧出来
+    KRLoadStage_fetchContextCode,      // fetchContextCode
+    KRLoadStage_initRenderCore,
+    KRLoadStage_initRenderContext,    // 初始化renderContext
+    KRLoadStage_pageBuild,                // 构建业务 shadow tree 耗时，会执行各view的body函数
+    KRLoadStage_pageLayout,                // 页面布局总耗时
+    KRLoadStage_createPage,          // kotlin pager 页面创建（包括init、build、layout）
+    KRLoadStage_fristPaint,            // 启动-首帧渲染出来总耗时
+    KRLoadStage_createInstance,         // 初始化环境后，createPage结束
+    KRLoadStage_newPage,                // kotlin侧执行newPage耗时
+    KRLoadStage_renderFP,               // createPage结束到首帧出来
 };
 
 typedef NS_OPTIONS(NSInteger, KRMonitorType) {
@@ -75,6 +76,8 @@ typedef NS_OPTIONS(NSInteger, KRMonitorType) {
 /// 内存数据
 @property (nonatomic, strong, readonly) KRMemoryMonitor *memoryMonitor;
 
+/// 导出性能数据
+- (NSDictionary*)performanceData;
 @end
 
 

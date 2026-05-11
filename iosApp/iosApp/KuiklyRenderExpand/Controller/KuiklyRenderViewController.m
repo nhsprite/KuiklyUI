@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,6 +22,10 @@
 //#import <Bugly/Bugly.h>
 
 #import "KRConvertUtil.h"
+#import "UINavigationController+FDFullscreenPopGesture.h"
+
+/// TurboDisplay 专属测试页面名称，只有该页面启用 TurboDisplay AOT 渲染
+static NSString * const kTurboDisplayTestPageName = @"TurboDisplayAppLoadTestPage";
 
 
 @interface Delegator  : NSObject<KRControllerDelegatorLifeCycleProtocol>
@@ -118,16 +122,17 @@
         NSString *exceptionString = noti.userInfo[@"exception"];
         NSArray *components = [exceptionString componentsSeparatedByString:@"\n"];
         NSString *exceptionName = [components firstObject];
-
         NSArray<NSString *> *callStackArray = [components subarrayWithRange:NSMakeRange(1, components.count - 1)];
         // bugly上报示例
-        //        [Bugly reportExceptionWithCategory:7 name:exceptionName reason:exceptionName callStack:callStackArray extraInfo:@{} terminateApp:YES];
+        // [Bugly reportExceptionWithCategory:7 name:exceptionName reason:exceptionName callStack:callStackArray extraInfo:@{} terminateApp:YES];
+        NSLog(@"report Kuikly Exception: %@, stacks:%@", exceptionName, callStackArray);
     }
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    self.fd_prefersNavigationBarHidden = YES;
     self.view.backgroundColor = [UIColor whiteColor];
     [_delegator viewDidLoadWithView:self.view];
     [self.navigationController setNavigationBarHidden:YES animated:NO];
@@ -185,6 +190,13 @@
     // report to bugly
 }
 
+- (void)onGetPerformanceData{
+    id<KRPerformanceDataProtocol> performance = _delegator.performanceManager;
+    // 获取performance相关信息
+    NSDictionary *data = [performance performanceData];
+    NSLog(@"onGetPerformanceData performance data:%@", data);
+}
+
 - (void)onPageLoadComplete:(BOOL)isSucceed error:(NSError *)error mode:(KuiklyContextMode)mode {
     if (error) {
         
@@ -192,6 +204,8 @@
     
     id<KRPerformanceDataProtocol> performance = _delegator.performanceManager;
     // 获取performance相关信息
+    NSDictionary *data = [performance performanceData];
+    NSLog(@"onPageLoadComplete performance data:%@", data);
 }
 
 #pragma mark - private
@@ -235,11 +249,33 @@
 
 
 - (NSDictionary<NSString *,NSObject *> *)contextPageData {
-    return @{@"dd": @(1)};
+    NSMutableDictionary *pageData = [NSMutableDictionary dictionary];
+    pageData[@"appId"] = @"1";
+    pageData[@"sysLang"] = [[NSLocale preferredLanguages] firstObject];
+    return pageData;
 }
 
+
+// 仅允许指定的测试页面走 TurboDisplay 渲染路径
+// 避免新安装无缓存时弹出错误弹窗影响其他业务页面的体验
 - (NSString *)turboDisplayKey {
-    return _pageName;
+    if ([_pageName isEqualToString:kTurboDisplayTestPageName]) {
+        return _pageName;
+    }
+    return nil;
+}
+
+- (KRTurboDisplayConfig *)configureTurboDisplay {
+    if ([_pageName isEqualToString:kTurboDisplayTestPageName]) {
+        KRTurboDisplayConfig *config = [[KRTurboDisplayConfig alloc] init];
+        // Demo 页面支持滚动位置恢复，则需要打开 延迟Diff
+        [config enableDelayedDiff];
+    //    [config enableAutoUpdateTurboDisplay];
+    //    [config disablePersistentRealTree];
+        return config;
+      
+    }
+    return nil;
 }
 
 

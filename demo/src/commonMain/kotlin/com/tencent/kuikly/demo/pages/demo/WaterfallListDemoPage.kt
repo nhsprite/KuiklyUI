@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,20 +18,23 @@ package com.tencent.kuikly.demo.pages.demo
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.BaseObject
 import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ColorStop
+import com.tencent.kuikly.core.base.Direction
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.directives.vforIndex
 import com.tencent.kuikly.core.reactive.collection.ObservableList
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
+import com.tencent.kuikly.core.timer.setTimeout
 import com.tencent.kuikly.core.views.*
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.demo.pages.base.ktx.setTimeout
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 
-internal class WaterFallItem : BaseObject() {
-    var title: String by observable("")
-    var bgColor: Color by observable(Color.WHITE)
-    var height: Float by observable(0f)
+internal class WaterFallItem(scope: PagerScope) : BaseObject() {
+    var title: String by scope.observable("")
+    var bgColor: Color by scope.observable(Color.WHITE)
+    var height: Float by scope.observable(0f)
 }
 
 @Page("WaterfallListDemoPage")
@@ -72,7 +75,28 @@ internal class WaterfallListDemoPage : BasePager() {
                 Refresh {
                     attr {
                         height(50f)
+                        width(pagerData.pageViewWidth)
                         backgroundColor(Color.RED)
+                    }
+                }
+
+                Hover {
+                    attr {
+                        absolutePosition(top = 0f, left =0f, right =0f)
+                        height(40f)
+//                        width(pagerData.pageViewWidth)
+                        backgroundLinearGradient(
+                            Direction.TO_LEFT,
+                            ColorStop(Color.RED, 0f),
+                            ColorStop(Color.YELLOW, 1f)
+                        )
+                    }
+                    Text {
+                        attr {
+                            alignSelfCenter()
+                            fontSize(30f)
+                            text("Hover View")
+                        }
                     }
                 }
 
@@ -138,7 +162,7 @@ internal class WaterfallListDemoPage : BasePager() {
     override fun created() {
         super.created()
         for (index in 0..1000) {
-            dataList.add(WaterFallItem().apply {
+            dataList.add(WaterFallItem(this).apply {
                 title = "我是第${this@WaterfallListDemoPage.dataList.size + 1}个卡片"
                 height = (200..500).random().toFloat()
                 bgColor = Color((0..255).random(), (0..255).random(), (0..255).random(), 1.0f)
@@ -147,7 +171,7 @@ internal class WaterfallListDemoPage : BasePager() {
 
         setTimeout(30) {
             for (index in 0..1000) {
-                dataList.add(WaterFallItem().apply {
+                dataList.add(WaterFallItem(this).apply {
                     title = "我是第${this@WaterfallListDemoPage.dataList.size + 1}个卡片"
                     height = (200..500).random().toFloat()
                     bgColor = Color((0..255).random(), (0..255).random(), (0..255).random(), 1.0f)

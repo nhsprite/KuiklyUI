@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,8 @@ package com.tencent.kuikly.core.base
 
 import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.manager.BridgeManager
+import com.tencent.kuikly.core.manager.PagerManager
+import com.tencent.kuikly.core.pager.Pager
 
 class Size(val width: Float, val height: Float) {
 
@@ -36,12 +38,23 @@ open class Shadow(private val pagerId: String, private val viewRef: Int, viewNam
     }
 
     open fun calculateRenderViewSize(width: Float, height: Float): Size {
+        val pager = PagerManager.getPager(pagerId) as Pager
+        val debugLogEnable = pager.isDebugLogEnable()
+        if (debugLogEnable) {
+            pager.pageLayoutTracer.shadowCalculateStart()
+        }
         val sizeStr = BridgeManager.calculateRenderViewSize(pagerId, viewRef, width, height)
         if (sizeStr.isEmpty()) {
             KLog.e("Shadow", "calculateRenderViewSize sizeStr is empty")
+            if (debugLogEnable) {
+                pager.pageLayoutTracer.shadowCalculateFinish()
+            }
             return Size(0f, 0f)
         }
         val parts = sizeStr.split("|")
+        if (debugLogEnable) {
+            pager.pageLayoutTracer.shadowCalculateFinish()
+        }
         return Size(parts[0].toFloat(), parts[1].toFloat())
     }
 
@@ -54,5 +67,3 @@ open class Shadow(private val pagerId: String, private val viewRef: Int, viewNam
         return if (result is String) result as String else result.toString()
     }
 }
-
-

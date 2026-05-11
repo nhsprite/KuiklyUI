@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -37,6 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSNumber* scrollIndex; // computed property
 @property (nonatomic, assign) CGRect renderFrame; // computed property
 @property (nonatomic, assign) BOOL addViewMethodDisable;
+@property (nonatomic, assign) BOOL nodePersistentChangedEnable;  // 禁用结构变化标记（View级别TurboDisplay控制）
 
 
 - (instancetype)initWithTag:(NSNumber *)tag viewName:(NSString *)viewName;

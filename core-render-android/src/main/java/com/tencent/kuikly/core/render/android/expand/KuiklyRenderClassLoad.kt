@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -48,6 +48,7 @@ import com.tencent.kuikly.core.render.android.expand.component.blur.KRBlurView
 import com.tencent.kuikly.core.render.android.expand.component.list.KRRecyclerContentView
 // import com.tencent.kuikly.core.render.android.expand.component.list.KRRecyclerView
 import com.tencent.kuikly.core.render.android.expand.component.pag.KRPAGView
+import com.tencent.kuikly.core.render.android.expand.module.KRFileModule
 import com.tencent.kuikly.core.render.android.expand.module.KRLogModule
 import com.tencent.kuikly.core.render.android.expand.module.KRMemoryCacheModule
 import com.tencent.kuikly.core.render.android.expand.module.KRSharedPreferencesModule
@@ -112,6 +113,7 @@ object KuiklyRenderClassLoad {
                 KuiklyRenderNativeMethod
                 KRMemoryCacheModule
                 KRSharedPreferencesModule
+                KRFileModule
                 KRFileManager
                 KRAPNGView
                 KRPAGView

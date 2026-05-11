@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.util.SizeF
 import android.view.View
+import com.tencent.kuikly.core.render.android.IKuiklyRenderContext
 import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.ktx.toColor
 import com.tencent.kuikly.core.render.android.css.ktx.toPxF
@@ -39,6 +40,8 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
      */
     var isForeground = false
     var targetView: View? = null
+    var kuiklyContext: IKuiklyRenderContext? = null
+
 
     private var borderRadiusF = BORDER_RADIUS_UNSET_VALUE
     private var borderRadii: FloatArray? = null
@@ -50,10 +53,10 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
 
             val borders = value.split(",")
             if (borders.size == BORDER_ELEMENT_SIZE) {
-                val tl = borders[BORDER_TOP_LEFT_INDEX].toFloat().toPxF()
-                val tr = borders[BORDER_TOP_RIGHT_INDEX].toFloat().toPxF()
-                val bl = borders[BORDER_BOTTOM_LEFT_INDEX].toFloat().toPxF()
-                val br = borders[BORDER_BOTTOM_RIGHT_INDEX].toFloat().toPxF()
+                val tl = kuiklyContext.toPxF(borders[BORDER_TOP_LEFT_INDEX].toFloat())
+                val tr = kuiklyContext.toPxF(borders[BORDER_TOP_RIGHT_INDEX].toFloat())
+                val bl = kuiklyContext.toPxF(borders[BORDER_BOTTOM_LEFT_INDEX].toFloat())
+                val br = kuiklyContext.toPxF(borders[BORDER_BOTTOM_RIGHT_INDEX].toFloat())
 
                 val raddi = floatArrayOf(
                     tl, tl,
@@ -62,17 +65,35 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
                     bl, bl
                 )
                 if (isAllBorderRadiusEqual(raddi)) {
-                    cornerRadius = tl
                     borderRadiusF = tl
+                    borderRadii = null
                 } else {
-                    cornerRadii = raddi
+                    borderRadiusF = BORDER_RADIUS_UNSET_VALUE
                     borderRadii = raddi
                 }
+                updateBorderRadius()
                 field = value
             }
         }
 
-    var borderWidth = BORDER_WIDTH_DEFAULT_VALUE
+    private fun updateBorderRadius() {
+        if (clipPath == null) {
+            if (borderRadiusF != BORDER_RADIUS_UNSET_VALUE) {
+                cornerRadius = borderRadiusF
+            } else if (borderRadii != null) {
+                cornerRadii = borderRadii
+            }
+        } else {
+            cornerRadius = 0f
+        }
+    }
+
+    private enum class LineStyle { SOLID, DASHED, DOTTED }
+    private var lineWidth = BORDER_WIDTH_DEFAULT_VALUE
+    private var lineStyle = LineStyle.SOLID
+    private var lineColor = Color.TRANSPARENT
+    private val linePaint by lazy(LazyThreadSafetyMode.NONE) { Paint() }
+    val borderWidth get() = lineWidth
     var borderStyle: String = KRCssConst.EMPTY_STRING
         set(value) {
             if (field == value) {
@@ -84,29 +105,67 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
                 return
             }
 
-            val lindWidth = borderStyles[BORDER_STYLE_WIDTH_INDEX].toFloat().toPxI()
-            val lineStyle = borderStyles[BORDER_LINE_STYLE_INDEX]
-            val lineColor = borderStyles[BORDER_STYLE_LINE_COLOR].toColor()
+            lineWidth = kuiklyContext.toPxI(borderStyles[BORDER_STYLE_WIDTH_INDEX].toFloat())
+            lineStyle = when (borderStyles[BORDER_LINE_STYLE_INDEX]) {
+                "dashed" -> LineStyle.DASHED
+                "dotted" -> LineStyle.DOTTED
+                else -> LineStyle.SOLID
+            }
+            lineColor = borderStyles[BORDER_STYLE_LINE_COLOR].toColor()
+            updateBorderStyle()
+            field = value
+        }
 
+    private fun updateBorderStyle() {
+        if (lineWidth <= 0 || lineColor == Color.TRANSPARENT) {
+            setStroke(0, Color.TRANSPARENT)
+            return
+        }
+        if (clipPath == null) {
             when (lineStyle) {
-                "solid" -> {
-                    setStroke(lindWidth, ColorStateList.valueOf(lineColor))
+                LineStyle.SOLID -> {
+                    setStroke(lineWidth, ColorStateList.valueOf(lineColor))
                 }
-                "dashed" -> {
-                    setStroke(lindWidth, ColorStateList.valueOf(lineColor), BORDER_DASH_WIDTH, BORDER_DASH_GAP)
-                }
-                "dotted" -> {
-                    setStroke(lindWidth,
+                LineStyle.DASHED -> {
+                    setStroke(lineWidth,
                         ColorStateList.valueOf(lineColor),
-                        lindWidth.toFloat(),
-                        BORDER_DASH_GAP
+                        lineWidth * BORDER_DASH_WIDTH,
+                        lineWidth * BORDER_DASH_GAP
+                    )
+                }
+                LineStyle.DOTTED -> {
+                    setStroke(lineWidth,
+                        ColorStateList.valueOf(lineColor),
+                        lineWidth.toFloat(),
+                        lineWidth.toFloat()
                     )
                 }
             }
-
-            borderWidth = lindWidth
-            field = value
+        } else {
+            setStroke(0, Color.TRANSPARENT)
+            linePaint.reset()
+            linePaint.style = Paint.Style.STROKE
+            linePaint.strokeWidth = lineWidth.toFloat()
+            linePaint.color = lineColor
+            when (lineStyle) {
+                LineStyle.SOLID -> {
+                    // do nothing
+                }
+                LineStyle.DASHED -> {
+                    linePaint.pathEffect = DashPathEffect(
+                        floatArrayOf(lineWidth * BORDER_DASH_WIDTH, lineWidth * BORDER_DASH_GAP),
+                        0f
+                    )
+                }
+                LineStyle.DOTTED -> {
+                    linePaint.pathEffect = DashPathEffect(
+                        floatArrayOf(lineWidth.toFloat(), lineWidth.toFloat()),
+                        0f
+                    )
+                }
+            }
         }
+    }
 
     var backgroundImage: String = KRCssConst.EMPTY_STRING
         set(value) {
@@ -115,6 +174,13 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
             }
             updateBackgroundImage(value)
             field = value
+        }
+
+    var clipPath: Path? = null
+        set(value) {
+            field = value
+            updateBorderRadius()
+            updateBorderStyle()
         }
 
     private fun updateBackgroundImage(backgroundImage: String) {
@@ -137,17 +203,31 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
             val scrollY = targetView?.scrollY?.toFloat() ?: 0f
             drawWithScrollXY(scrollX, scrollY, canvas)
         } else {
-            super.draw(canvas)
+            drawWithClipPath(canvas)
         }
     }
 
     private fun drawWithScrollXY(scrollX: Float, scrollY: Float, canvas: Canvas) {
         if (scrollX == 0f && scrollY == 0f) {
-            super.draw(canvas)
+            drawWithClipPath(canvas)
         } else {
             canvas.translate(scrollX, scrollY)
-            super.draw(canvas)
+            drawWithClipPath(canvas)
             canvas.translate(-scrollX, -scrollY)
+        }
+    }
+
+    private fun drawWithClipPath(canvas: Canvas) {
+        if (clipPath == null) {
+            super.draw(canvas)
+        } else {
+            val checkpoint = canvas.save()
+            canvas.clipPath(clipPath!!)
+            super.draw(canvas)
+            canvas.restoreToCount(checkpoint)
+            if (lineWidth > 0 && lineColor != Color.TRANSPARENT) {
+                canvas.drawPath(clipPath!!, linePaint)
+            }
         }
     }
 
@@ -171,8 +251,8 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
         private const val BORDER_RADIUS_UNSET_VALUE = -1.0f
         private const val BORDER_WIDTH_DEFAULT_VALUE = 0
 
-        private val BORDER_DASH_GAP = 1f.toPxF()
-        private val BORDER_DASH_WIDTH = 4f.toPxF()
+        private const val BORDER_DASH_GAP = 1.5f
+        private const val BORDER_DASH_WIDTH = 3f
 
         private const val BACKGROUND_IMAGE_DIRECTION_INDEX = 0
         private const val BACKGROUND_IMAGE_DIRECTION_BOTTOM_TOP = 0
@@ -224,11 +304,10 @@ class KRCSSBackgroundDrawable : GradientDrawable() {
             val y0: Float
             val y1: Float
             val r = RectF().apply {
-                val sizeF = size
                 left = 0f
                 top = 0f
-                right = sizeF.width
-                bottom = sizeF.height
+                right = size.width
+                bottom = size.height
             }
 
             when (backgroundImageParseTriple.first) {

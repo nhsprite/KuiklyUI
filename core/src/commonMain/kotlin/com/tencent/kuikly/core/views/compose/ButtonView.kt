@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,14 +15,27 @@
 
 package com.tencent.kuikly.core.views.compose
 
-import com.tencent.kuikly.core.base.*
-import com.tencent.kuikly.core.base.event.EventHandlerFn
+import com.tencent.kuikly.core.base.Anchor
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ComposeAttr
+import com.tencent.kuikly.core.base.ComposeEvent
+import com.tencent.kuikly.core.base.ComposeView
+import com.tencent.kuikly.core.base.ContainerAttr
+import com.tencent.kuikly.core.base.Scale
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.event.EventName
 import com.tencent.kuikly.core.base.event.TouchParams
+import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.layout.FlexDirection
 import com.tencent.kuikly.core.reactive.handler.observable
-import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.views.Image
+import com.tencent.kuikly.core.views.ImageAttr
+import com.tencent.kuikly.core.views.Text
+import com.tencent.kuikly.core.views.TextAttr
+import com.tencent.kuikly.core.views.View
+import com.tencent.kuikly.core.views.internal.TouchEventHandlerFn
 
 class ButtonView : ComposeView<ButtonAttr, ButtonEvent>() {
     private var highlightViewBgColor by observable(Color.TRANSPARENT)
@@ -103,7 +116,6 @@ class ButtonView : ComposeView<ButtonAttr, ButtonEvent>() {
     }
 }
 
-
 class ButtonAttr : ComposeAttr() {
 
     internal var titleAttrInit: (TextAttr.()->Unit)? = null
@@ -137,10 +149,9 @@ class ButtonAttr : ComposeAttr() {
 
 }
 
-
 class ButtonEvent : ComposeEvent() {
-    private val touchDownHandlers = arrayListOf<TouchEventHandlerFn>()
-    private val touchUpHandlers = arrayListOf<TouchEventHandlerFn>()
+    private val touchDownHandlers = fastArrayListOf<TouchEventHandlerFn>()
+    private val touchUpHandlers = fastArrayListOf<TouchEventHandlerFn>()
     fun touchDown(handler: TouchEventHandlerFn) {
         if (touchDownHandlers.isEmpty()) {
             register(EventName.TOUCH_DOWN.value) {

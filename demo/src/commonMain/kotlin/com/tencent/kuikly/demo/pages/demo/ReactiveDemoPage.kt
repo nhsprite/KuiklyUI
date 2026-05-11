@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.directives.vfor
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.reactive.collection.ObservableList
@@ -24,8 +25,10 @@ import com.tencent.kuikly.core.views.List
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.demo.pages.base.ktx.setTimeout
 import com.tencent.kuikly.core.reactive.handler.*
+import com.tencent.kuikly.core.reactive.handler.observable
+import com.tencent.kuikly.core.timer.setTimeout
+
 @Page("reactive")
 internal class ReactiveDemoPage: BasePager() {
 
@@ -35,7 +38,7 @@ internal class ReactiveDemoPage: BasePager() {
     override fun viewDidLoad() {
         super.viewDidLoad()
         for (i in 0..2) {
-            val item = ListItemExample()
+            val item = ListItemExample(this)
             item.title = "标题 index :" + i
             pageObservableList.add(item)
         }
@@ -45,7 +48,7 @@ internal class ReactiveDemoPage: BasePager() {
                 if (i > 0) {
                     isSelected = true
                 }
-                val item = ListItemExample()
+                val item = ListItemExample(this)
                 item.title = "标题 index :" + pageObservableList.count()
                 pageObservableList.add(item)
 
@@ -54,7 +57,7 @@ internal class ReactiveDemoPage: BasePager() {
                     for (i in 0..10) {
                         setTimeout(i * 1000) {
 
-                            val item = ListItemExample()
+                            val item = ListItemExample(this)
                             item.title = "标题 index :" + pageObservableList.count()
                             pageObservableList.add(item)
 
@@ -63,13 +66,9 @@ internal class ReactiveDemoPage: BasePager() {
 
                             }
                         }
-
-
                     }
                 }
             }
-
-
         }
     }
     override fun created() {
@@ -93,16 +92,6 @@ internal class ReactiveDemoPage: BasePager() {
                 }
             }
 
-
-//            vif({ctx.isSelected == false}) {
-//                View {
-//                    attr {
-//                        size(100f, 100f)
-//                        backgroundColor(Color.RED)
-//                    }
-//                }
-//            }
-
             vif({ctx.isSelected}) {
                 View {
                     attr {
@@ -111,32 +100,13 @@ internal class ReactiveDemoPage: BasePager() {
                     }
                 }
             }
-
-//            // 背景图
-//            Image {
-//                attr {
-//                    absolutePosition(0f, 0f, 0f, 0f)
-//                    src("https://sqimg.qq.com/qq_product_operations/kan/images/viola/viola_bg.jpg")
-//                }
-//            }
-//            // navBar
-//            NavBar {
-//                attr {
-//                    title = "Modal组件Demo"
-//                }
-//            }
-
-
-
-
-
         }
     }
 
 }
 
-internal class ListItemExample : BaseObject() {
-    var title by observable("")
+internal class ListItemExample(scope: PagerScope) : BaseObject() {
+    var title by scope.observable("")
 
 }
 
@@ -168,8 +138,6 @@ internal class ExampleCardView : ComposeView<ExampleCardAttr, ComposeEvent>() {
                     }
                 }
             }
-
-
         }
     }
 
@@ -185,4 +153,3 @@ internal class ExampleCardView : ComposeView<ExampleCardAttr, ComposeEvent>() {
 internal fun ViewContainer<*, *>.ExampleCard(init: ExampleCardView.() -> Unit) {
     addChild(ExampleCardView(), init)
 }
-

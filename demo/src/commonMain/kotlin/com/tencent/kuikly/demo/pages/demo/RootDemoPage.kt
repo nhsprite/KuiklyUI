@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -26,7 +26,6 @@ import com.tencent.kuikly.core.views.List
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.core.views.compose.Button
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.demo.pages.demo.base.DemoUtils
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 import com.tencent.kuikly.core.reactive.handler.*
 internal class ButtonDataItem {
@@ -156,7 +155,6 @@ internal class RootDemoPage: BasePager() {
             itemList.add(this)
         }
 
-
         // SliderPageViewDemo
         ButtonDataItem().apply {
             title = "SliderPageViewDemo"
@@ -198,7 +196,6 @@ internal class RootDemoPage: BasePager() {
             jumUrl = generateJumpUrl("${title}Page")
             itemList.add(this)
         }
-
 
         // Transform Demo
         ButtonDataItem().apply {
@@ -243,11 +240,16 @@ internal class RootDemoPage: BasePager() {
         }
 
         ButtonDataItem().apply {
+            title = "Image Shared Drawable Test"
+            jumUrl = generateJumpUrl("image_shared_drawable_demo")
+            itemList.add(this)
+        }
+
+        ButtonDataItem().apply {
             title = "profileDemo"
             jumUrl = generateJumpUrl("profileDemoPage")
             itemList.add(this)
         }
-
 
     }
 

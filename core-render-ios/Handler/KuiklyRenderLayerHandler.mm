@@ -1,7 +1,7 @@
 /*
 * Tencent is pleased to support the open source community by making KuiklyUI
 * available.
-* Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+* Copyright (C) 2025 Tencent. All rights reserved.
 * Licensed under the License of KuiklyUI;
 * you may not use this file except in compliance with the License.
 * You may obtain a copy of the License at
@@ -13,10 +13,10 @@
 * limitations under the License.
 */
 
-#import <TDFCommon/TDFBaseModule.h>
-#import <TDFCommon/TDFConvert.h>
-#import <TDFCommon/TDFModuleProtocol.h>
-#import <TDFCommon/TDFNativeMethod.h>
+#import "TDFBaseModule.h"
+#import "TDFConvert.h"
+#import "TDFModuleProtocol.h"
+#import "TDFNativeMethod.h"
 #import <pthread.h>
 #import "KRConvertUtil.h"
 #import "KRLogModule.h"
@@ -29,6 +29,8 @@
 @implementation KuiklyRenderLayerHandler {
     /** 渲染层的rootView */
     __weak UIView* _rootView;
+    /** 上下文环境参数 */
+    KuiklyContextParam *_contextParam;
     /** renderView的索引Map */
     NSMutableDictionary<NSNumber *, id<KuiklyRenderViewExportProtocol>> *_renderViewRegistry;
     /** shadow的索引Map */
@@ -51,6 +53,7 @@ Class _Nullable KRClassFromString(NSString *aClassName) {
 - (instancetype)initWithRootView:(UIView *)rootView contextParam:(KuiklyContextParam *)contextParam {
     if (self = [super init]) {
         _rootView = rootView;
+        _contextParam = contextParam;
         _renderViewRegistry = [[NSMutableDictionary alloc] init];
         _renderViewReuseQueue = [[NSMutableDictionary alloc] init];
         _moduleRegistry = [[NSMutableDictionary alloc] init];
@@ -95,12 +98,17 @@ Class _Nullable KRClassFromString(NSString *aClassName) {
 - (void)setRenderViewFrameWithTag:(NSNumber *)tag frame:(CGRect)frame {
     NSAssert([NSThread isMainThread], @"should call on main thread");
     id<KuiklyRenderViewExportProtocol> viewHandler = [self p_renderViewHandlerWithTag:tag];
-    [viewHandler hrv_setPropWithKey:@"frame" propValue:[NSValue valueWithCGRect:frame]];
+    [viewHandler hrv_setPropWithKey:@"frame" propValue:@(frame)];
 }
 
 - (void)removeRenderViewWithTag:(NSNumber *)tag {
     NSAssert([NSThread isMainThread], @"should call on main thread");
     [self p_removeViewWithTag:tag];
+}
+
+- (void)setContextParamToShadow:(id<KuiklyRenderShadowProtocol>)shadow {
+    NSAssert([NSThread isMainThread], @"should call on main thread");
+    [shadow hrv_setPropWithKey:@"contextParam" propValue:_contextParam];        // Turdisplay shadow注入ContextParam
 }
 
 - (CGSize)calculateRenderViewSizeWithTag:(NSNumber *)tag constraintSize:(CGSize)constraintSize {
@@ -220,6 +228,9 @@ Class _Nullable KRClassFromString(NSString *aClassName) {
             if ([moduleHandler respondsToSelector:@selector(setHr_rootView:)]) {
                 [moduleHandler performSelector:@selector(setHr_rootView:) withObject:_rootView];
             }
+            if ([moduleHandler respondsToSelector:@selector(setHr_contextParam:)]) {
+                [moduleHandler performSelector:@selector(setHr_contextParam:) withObject:_contextParam];
+            }
             if (moduleHandler) {
                _moduleRegistry[moduleName] = moduleHandler;
             } else {
@@ -303,7 +314,8 @@ Class _Nullable KRClassFromString(NSString *aClassName) {
     assert(renderViewHandler);  // renderViewHandler不存在
 #endif
     [renderViewHandler hrv_removeFromSuperview];
-    if ([renderViewHandler respondsToSelector:@selector(hrv_prepareForeReuse)]) {
+    if ([renderViewHandler respondsToSelector:@selector(hrv_prepareForeReuse)]
+        && !(((UIView *)renderViewHandler).kr_reuseDisable)) {
         // 放进复用队列
         [renderViewHandler hrv_prepareForeReuse];
         [self p_pushRenderViewHandlerToReuseQueueWithWithViewHandlder:renderViewHandler];

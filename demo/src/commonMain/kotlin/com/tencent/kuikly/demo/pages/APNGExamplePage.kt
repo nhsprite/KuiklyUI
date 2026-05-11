@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,16 +16,14 @@
 package com.tencent.kuikly.demo.pages
 
 import com.tencent.kuikly.core.annotations.Page
-import com.tencent.kuikly.core.base.Color
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewRef
 import com.tencent.kuikly.core.log.KLog
-import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.timer.setTimeout
-import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.views.APNG
+import com.tencent.kuikly.core.views.APNGVView
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
-
 
 @Page("APNGExamplePage")
 internal class APNGExamplePage: BasePager() {
@@ -74,16 +72,4 @@ internal class APNGExamplePage: BasePager() {
         }
     }
 
-    override fun viewDidLoad() {
-        super.viewDidLoad()
-//        setTimeout(pagerId, 2000) {
-//            autoPlay = true
-//        }
-
-
-    }
-
-    companion object {
-        private const val TAG = "PAGViewDemoPage"
-    }
 }

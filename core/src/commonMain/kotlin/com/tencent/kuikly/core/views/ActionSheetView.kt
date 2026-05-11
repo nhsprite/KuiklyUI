@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,16 +15,21 @@
 
 package com.tencent.kuikly.core.views
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Animation
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ContainerAttr
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.base.VirtualView
 import com.tencent.kuikly.core.base.event.ClickParams
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.base.event.EventName
-import com.tencent.kuikly.core.directives.velse
 import com.tencent.kuikly.core.directives.vfor
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
 import com.tencent.kuikly.core.views.compose.Button
+
 /*
  * 操作表组件(用于提供一组可供用户选择的操作，以便完成任务)，UI风格对齐iOS UIActionSheet风格, 并支持自定义弹窗UI
  * 用法示例:
@@ -46,7 +51,6 @@ import com.tencent.kuikly.core.views.compose.Button
 fun ViewContainer<*, *>.ActionSheet(init : ActionSheetView.() -> Unit) {
     addChild(ActionSheetView(), init)
 }
-
 
 class ActionSheetAttr : ContainerAttr() {
     internal var showActionSheet by observable(false)
@@ -140,12 +144,15 @@ class ActionSheetEvent : Event() {
 }
 
 class ActionSheetView : VirtualView<ActionSheetAttr, ActionSheetEvent>() {
+    private var useBlur = false
     private var showActionSheeting by observable(false)
     override fun createAttr() = ActionSheetAttr()
     override fun createEvent() = ActionSheetEvent()
 
     override fun didInit() {
         super.didInit()
+        // blur may cause performance and stable issue on android, exclude it for now
+        useBlur = !this.getPager().pageData.isAndroid
         showActionSheeting = attr.showActionSheet
         initContentViewCreator()
         initBackgroundViewCreator()
@@ -162,16 +169,23 @@ class ActionSheetView : VirtualView<ActionSheetAttr, ActionSheetEvent>() {
                 attr {
                     borderRadius(14f)
                     margin(left = 8f, right = 8f, bottom = 8f)
+                    val colorHex: Long
+                    val alpha: Float
                     if (getPager().isNightMode()) {
-                        backgroundColor(Color(red255 = 0, blue255 = 0, green255 = 0, alpha01 = 0.85f))
+                        colorHex = 0x000000
+                        alpha = if (ctx.useBlur) 0.85f else 1f
                     } else {
-                        backgroundColor(Color(red255 = 255, blue255 = 255, green255 = 255, alpha01 = 0.75f))
+                        colorHex = 0xFFFFFF
+                        alpha = if (ctx.useBlur) 0.75f else 0.9f
                     }
+                    backgroundColor(Color(colorHex, alpha))
                 }
 
-                Blur {
-                    attr {
-                        absolutePositionAllZero()
+                if (ctx.useBlur) {
+                    Blur {
+                        attr {
+                            absolutePositionAllZero()
+                        }
                     }
                 }
                 vif({ctx.attr.descriptionOfActions.isNotEmpty()}) {
@@ -184,7 +198,7 @@ class ActionSheetView : VirtualView<ActionSheetAttr, ActionSheetEvent>() {
                             attr {
                                 fontSize(13f)
                                 lineHeight(18f)
-                                fontWeightSemisolid()
+                                fontWeightSemiBold()
                                 text(ctx.attr.descriptionOfActions)
                                 if (getPager().isNightMode()) { color(0xFF89848a) } else { color(0xFF89848a) }
                                 textAlignCenter()
@@ -281,7 +295,6 @@ class ActionSheetView : VirtualView<ActionSheetAttr, ActionSheetEvent>() {
 
                     }
 
-
                 }
             }
         }
@@ -295,7 +308,7 @@ class ActionSheetView : VirtualView<ActionSheetAttr, ActionSheetEvent>() {
                     titleAttr {
                         fontSize(20f)
                         height(24f)
-                        if (isBold) fontWeightSemisolid() else fontWeight400()
+                        if (isBold) fontWeightSemiBold() else fontWeight400()
                         color(Color(0xFF007AFF))
                         buttonTitleAttr.invoke(this)
                     }

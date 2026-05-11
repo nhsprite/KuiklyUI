@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-
 package impl.submodule
 
 import com.squareup.kotlinpoet.*
@@ -23,7 +22,7 @@ import impl.PageInfo
 /**
  * Created by kam on 2022/6/25.
  */
-class IOSMultiTargetEntryBuilder(private val isMainModule: Boolean, private val subModules: String, private val moduleId: String) : IOSTargetEntryBuilder() {
+class IOSMultiTargetEntryBuilder(private val catchException: Boolean, private val isMainModule: Boolean, private val subModules: String, private val moduleId: String) : IOSTargetEntryBuilder(catchException) {
 
     override fun build(builder: FileSpec.Builder, pagesAnnotations: List<PageInfo>) {
         if (!isMainModule) {

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.compose.Button
@@ -70,11 +71,13 @@ fun ViewContainer<*, *>.AnimationBall(init: AnimationBall.() -> Unit) {
     addChild(AnimationBall(), init)
 }
 
-class AnimationControlButtonState() {
+class AnimationControlButtonState(scope: PagerScope) : PagerScope by scope {
     var buttonEnable by observable(true)
     var buttonColor: Color by observable(Color())
     var buttonText: String by observable("播放动画")
 }
+// helper function for refactoring
+internal fun PagerScope.AnimationControlButtonState() = AnimationControlButtonState(this)
 
 class AnimationControlButtonAttr(): ComposeAttr() {
     var state by observable(AnimationControlButtonState())

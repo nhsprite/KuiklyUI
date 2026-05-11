@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,6 +29,7 @@ import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.tencent.kuikly.android.demo.KRApplication
+import com.tencent.kuikly.core.render.android.KuiklyRenderViewContext
 import com.tencent.kuikly.core.render.android.adapter.HRImageLoadOption
 import com.tencent.kuikly.core.render.android.adapter.IKRImageAdapter
 import kotlin.math.roundToInt
@@ -48,6 +49,20 @@ class KRImageAdapter(val context: Context) : IKRImageAdapter {
             // http/assets/file 图片使用 glide 加载
             requestImage(imageLoadOption, callback)
         }
+    }
+
+    override fun getDrawableWidth(
+        kuiklyRenderViewContext: KuiklyRenderViewContext,
+        drawable: Drawable
+    ): Float {
+        return drawable.intrinsicWidth.toFloat()
+    }
+
+    override fun getDrawableHeight(
+        kuiklyRenderViewContext: KuiklyRenderViewContext,
+        drawable: Drawable
+    ): Float {
+        return drawable.intrinsicHeight.toFloat()
     }
 
     private fun requestImage(
@@ -96,7 +111,6 @@ class KRImageAdapter(val context: Context) : IKRImageAdapter {
                 ) {
                     callback.invoke(resource)
                 }
-
             })
     }
 
@@ -113,9 +127,11 @@ class KRImageAdapter(val context: Context) : IKRImageAdapter {
                 options.inPreferredConfig = Bitmap.Config.ARGB_8888
                 options.inJustDecodeBounds = false
                 try {
-                    options.inSampleSize = calculateInSampleSize(options,
+                    options.inSampleSize = calculateInSampleSize(
+                        options,
                         imageLoadOption.requestWidth,
-                        imageLoadOption.requestHeight)
+                        imageLoadOption.requestHeight
+                    )
                 } catch (e: ArithmeticException) { // 偶现报除以0，可能是inSampleSize超过int的范围溢出了。这里catch兜底使用原始inSampleSize
                     Log.d("ECHRImageAdapter", "loadFromBase64: $e")
                 }

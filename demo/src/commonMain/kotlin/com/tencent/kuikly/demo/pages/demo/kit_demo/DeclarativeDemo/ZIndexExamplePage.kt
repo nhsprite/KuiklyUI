@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -30,7 +30,7 @@ import com.tencent.kuikly.demo.pages.demo.base.NavBar
 import kotlin.math.max
 import kotlin.random.Random
 
-internal class ZIndexViewData {
+internal class ZIndexViewData(pagerScope: PagerScope) : PagerScope by pagerScope {
     var zIndex by observable(0)
     var color by observable(Color(0xFF000000))
     var boxShadow by observable(BoxShadow(offsetX = 0f, offsetY = 0f, shadowColor = Color(0x00000000), shadowRadius = 0f))
@@ -155,7 +155,7 @@ internal class ZIndexExamplePage: BasePager() {
     }
 
     fun addRandomZIndexViewData() {
-        var data = ZIndexViewData()
+        var data = ZIndexViewData(this)
         data.boxShadow = shadowList[shadowIndex]
         data.color = randomColor()
         data.position = randomPosition()

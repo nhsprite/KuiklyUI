@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,8 +19,6 @@ import com.tencent.kuikly.core.base.ContainerAttr
 import com.tencent.kuikly.core.base.ViewConst
 import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.event.Event
-import com.tencent.kuikly.core.base.event.EventName
-import com.tencent.kuikly.core.base.event.TouchParams
 import com.tencent.kuikly.core.layout.undefined
 
 /**
@@ -66,15 +64,6 @@ class SafeAreaView : ViewContainer<SafeAreaAttr, SafeAreaEvent>() {
     }
 }
 
+class SafeAreaAttr : ContainerAttr()
 
-class SafeAreaAttr : ContainerAttr() {
-
-}
-
-open class SafeAreaEvent : Event() {
-
-}
-
-
-
-
+open class SafeAreaEvent : Event()

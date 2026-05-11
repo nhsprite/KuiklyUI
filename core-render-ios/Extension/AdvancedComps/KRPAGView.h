@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewExportProtocol.h"
 #import "KRHttpRequestTool.h"
 NS_ASSUME_NONNULL_BEGIN
@@ -86,10 +86,21 @@ typedef id<KRPagViewProtocol> _Nonnull (^PAGViewCreator)(CGRect frame);
 - (void)stop;
 
 /**
+ * Set the animation progress.
+ */
+- (void)setProgress:(double)value;
+
+/**
  * Set the number of times the animation will repeat. The default is 1, which means the animation
  * will play only once. 0 means the animation will play infinity times.
  */
 - (void)setRepeatCount:(int)repeatCount;
+
+/**
+ * Set the scale mode for the PAG content.
+ * 0: NONE, 1: STRETCH, 2: LETTER_BOX, 3: ZOOM.
+ */
+- (void)setScaleMode:(int)scaleMode;
 
 /**
  * Returns the current PAGComposition for PAGView to render as content.
@@ -99,6 +110,9 @@ typedef id<KRPagViewProtocol> _Nonnull (^PAGViewCreator)(CGRect frame);
 @optional
 // kuikly侧设置的属性，一般用于业务扩展使用
 - (void)kr_setKuiklyPropWithKey:(NSString *)propKey propValue:(id)propValue;
+
+// kuikly侧调用方法，一般用于业务扩展使用
+- (void)kr_callWithMethod:(NSString * _Nonnull)method params:(NSString * _Nullable)params;
 
 @end
 
@@ -184,7 +198,7 @@ typedef id<KRPagViewProtocol> _Nonnull (^PAGViewCreator)(CGRect frame);
  * Creates a PAGImage object from a path of a image file, return null if the file does not exist or
  * it's not a valid image file.
  */
-+ (id<PAGImageProtocol>)fromPath:(NSString*)path;
++ (id<PAGImageProtocol>)FromPath:(NSString*)path;
 
 @end
 

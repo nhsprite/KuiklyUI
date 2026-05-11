@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,6 +20,7 @@ import com.tencent.kuikly.core.base.event.EventHandlerFn
 import com.tencent.kuikly.core.global.GlobalFunctionRef
 import com.tencent.kuikly.core.global.GlobalFunctions
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.timer.setTimeout
 import com.tencent.kuikly.core.views.PageList
 import com.tencent.kuikly.core.views.PageListEvent
@@ -79,8 +80,6 @@ class SliderPageView : ComposeView<SliderPageAttr, SliderPageEvent>() {
             }
         }
     }
-
-
 
     override fun createAttr(): SliderPageAttr {
         return SliderPageAttr()
@@ -156,8 +155,6 @@ class SliderPageView : ComposeView<SliderPageAttr, SliderPageEvent>() {
         scrollToPage(currentPageIndex + 1, true)
     }
 
-
-
     private fun firePageIndexDidChangedEventIfNeed(data: JSONObject) {
         var index = data.optInt("index")
         if (attr.itemCount > 1) {
@@ -207,8 +204,8 @@ class SliderPageView : ComposeView<SliderPageAttr, SliderPageEvent>() {
 class SliderPageAttr: ComposeAttr() {
     var defaultPageIndex: Int = 0
     var isHorizontal: Boolean = true
-    var pageItemWidth = 0f
-    var pageItemHeight = 0f
+    var pageItemWidth: Float by observable(0f)
+    var pageItemHeight: Float by observable(0f)
     var scrollEnable: Boolean = true
     // 轮播时间间隔（ms单位），若 == 0 则不轮播
     var loopPlayIntervalTimeMs :Int = 3000
@@ -222,7 +219,7 @@ class SliderPageAttr: ComposeAttr() {
     internal var lazyCreateItemsTask : (PageListView<*, *>.() -> Unit)? = null
     fun <T> initSliderItems(dataList: List<T>, creator: SliderItemCreator<T>) {
         if (dataList.isEmpty()) {
-            return ;
+            return
         }
         itemCount = dataList.count()
         val ctx = this

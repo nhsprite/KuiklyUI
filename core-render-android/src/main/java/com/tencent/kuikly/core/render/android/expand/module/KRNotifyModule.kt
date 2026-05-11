@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -179,6 +179,7 @@ fun Intent.getKuiklyEventName(): String = getStringExtra(KRNotifyModule.KEY_EVEN
 
 private fun Context.sendKREvent(eventName: String, data: String) {
     val intent = Intent(KRNotifyModule.BROADCAST_RECEIVER_ACTION).apply {
+        setPackage(applicationContext.packageName)
         putExtra(KRNotifyModule.KEY_EVENT_NAME, eventName)
         putExtra(KRNotifyModule.KEY_DATA, data)
     }

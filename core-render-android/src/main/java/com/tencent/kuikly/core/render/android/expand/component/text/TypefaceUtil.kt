@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,10 +17,10 @@ package com.tencent.kuikly.core.render.android.expand.component.text
 
 import android.graphics.Typeface
 import android.util.LruCache
+import com.tencent.kuikly.core.render.android.KuiklyContextParams
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 
-object TypeFaceUtil {
-    private const val TAG = "TypeFaceUtil"
+class TypeFaceLoader(private val contextParams: KuiklyContextParams? = null) {
     private class Key(val fontFamilyName: String, val italic: Boolean) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -55,7 +55,7 @@ object TypeFaceUtil {
             if (familyName.isEmpty()) {
                 continue
             }
-            KuiklyRenderAdapterManager.krFontAdapter?.getTypeface(familyName) {
+            KuiklyRenderAdapterManager.krFontAdapter?.getTypeface(familyName, contextParams) {
                 typeface = it
             }
             if (typeface != null && typeface != Typeface.DEFAULT) {

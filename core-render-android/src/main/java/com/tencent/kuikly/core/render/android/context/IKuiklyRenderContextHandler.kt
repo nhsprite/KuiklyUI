@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -50,7 +50,6 @@ interface IKuiklyRenderContextHandler {
      * 设置 Kotlin Bridge 状态监听
      */
     fun setBridgeStatusListener(listener: IKotlinBridgeStatusListener)
-
 
     /**
      * 设置异常监听
@@ -107,3 +106,5 @@ enum class KuiklyRenderNativeMethod(val value: Int) {
 
 typealias KuiklyRenderNativeMethodCallback = (methodId: KuiklyRenderNativeMethod, args: List<Any?>) -> Any?
 
+// 用于记录各个callNative的task的次数
+internal var nativeMethodCallCounts = IntArray(KuiklyRenderNativeMethod.values().size + 1)

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,7 +19,7 @@
 
 @interface KRActivityIndicatorView()
 
-@property (nonatomic, strong) NSString * css_style; // "whilte" or "gray"
+@property (nonatomic, strong) NSString * css_style; // "white" or "gray"
 
 @end
 
@@ -28,7 +28,12 @@
 - (instancetype)initWithFrame:(CGRect)frame {
     if ([super initWithFrame:frame]) {
         self.backgroundColor = [UIColor clearColor];
+#if !TARGET_OS_OSX // [macOS]
         self.activityIndicatorViewStyle = UIActivityIndicatorViewStyleWhite;
+#else // [macOS
+        self.activityIndicatorViewStyle = UIActivityIndicatorViewStyleMedium;
+        self.color = [UIColor whiteColor];
+#endif // macOS]
         [self startAnimating];
     }
     return self;
@@ -46,11 +51,20 @@
 
 - (void)setCss_style:(NSString *)css_style {
     _css_style = css_style;
+#if !TARGET_OS_OSX // [macOS]
     if ([css_style isEqualToString:@"white"]) {
         self.activityIndicatorViewStyle = UIActivityIndicatorViewStyleWhite;
     } else {
         self.activityIndicatorViewStyle = UIActivityIndicatorViewStyleGray;
     }
+#else // [macOS
+    // macOS: Use color property instead of style to set white/gray appearance
+    if ([css_style isEqualToString:@"white"]) {
+        self.color = [UIColor whiteColor];
+    } else {
+        self.color = [UIColor grayColor];
+    }
+#endif // macOS]
 }
 
 @end

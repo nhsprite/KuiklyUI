@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -42,6 +42,11 @@
 - (NSString *)md5:(NSDictionary *)args {
     NSString *string = args[KR_PARAM_KEY];
     return [string kr_md5String];
+}
+
+- (NSString *)md5With32:(NSDictionary *)args {
+    NSString *string = args[KR_PARAM_KEY];
+    return [string kr_md5String32];
 }
 
 - (NSString *)sha256:(NSDictionary *)args {

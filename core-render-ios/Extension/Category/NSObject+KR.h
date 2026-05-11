@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#import "KRUIKit.h" // [macOS]
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -33,6 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (id)kr_performWithClass:(Class)classTarget selector:(SEL)aSelector  withObjects:(NSArray *)objects;
 
++ (BOOL)kr_swizzleInstanceMethod:(SEL)origSel withMethod:(SEL)altSel;
 
 @end
 
@@ -47,9 +49,22 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSString *)kr_appendUrlEncodeWithParam:(NSDictionary *)param;
 - (NSString *)kr_md5String;
+- (NSString *)kr_md5String32;
 - (NSString *)kr_base64Encode;
 - (NSString *)kr_base64Decode;
 - (NSString *)kr_sha256String;
+- (NSString *)kr_subStringWithIndex:(NSUInteger)index;
+- (NSUInteger)kr_length; // emoji/中文算一个1个长度来统计字符串长度
+
+/**
+ * 按UTF-8字节计算长度
+ */
+- (NSUInteger)kr_byteLength;
+
+/**
+ * 按视觉宽度计算长度（ASCII字符占1，中文/emoji等占2）
+ */
+- (NSUInteger)kr_visualWidth;
 
 @end
 
@@ -72,24 +87,25 @@ NS_ASSUME_NONNULL_BEGIN
  @param radius 模糊的范围 可以1~99
  @return 返回已经模糊过的图片
  */
-
 - (UIImage *)kr_blurBlurRadius:(CGFloat)radius;
 
-/**
- * 转换为热力图图片
- */
-- (UIImage *)kr_applyHeatmapWithGridentRawData:(unsigned char *)gridentRawData gridentImage:(UIImage *)gridentImage;
-
-/**
- * 获取图片像素数组
- */
-- (unsigned char *)kr_getRawData;
 /**
  * 染色非透明像素为该颜色
  */
 - (UIImage *)kr_tintedImageWithColor:(UIColor *)color;
+
+/**
+ * 图片应用颜色滤镜矩阵
+ */
+- (UIImage *)kr_applyColorFilterWithColorMatrix:(NSString *)colorFilterMatrix;
+
 @end
 
+@interface NSMutableAttributedString (KR)
+
+- (void)kr_addAttribute:(NSAttributedStringKey)name value:(id)value range:(NSRange)range;
+
+@end
 
 @interface UIApplication (KR)
 + (BOOL)isAppExtension;

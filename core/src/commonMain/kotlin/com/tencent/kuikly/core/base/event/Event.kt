@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -225,6 +225,26 @@ open class Event : BaseEvent() {
         }
     }
 
+    /**
+     * 鼠标悬停进入事件 (macOS)
+     * @param handler 鼠标进入视图区域时的回调
+     */
+    open fun mouseEnter(handler: () -> Unit) {
+        this.register(EventName.MOUSE_ENTER.value) {
+            handler()
+        }
+    }
+
+    /**
+     * 鼠标悬停离开事件 (macOS)
+     * @param handler 鼠标离开视图区域时的回调
+     */
+    open fun mouseExit(handler: () -> Unit) {
+        this.register(EventName.MOUSE_EXIT.value) {
+            handler()
+        }
+    }
+
     internal fun listenInternalAnimationCompletion(handler: (AnimationCompletionParams) -> Unit) {
         this.internalAnimationCompletion = handler
         val eventHandler = handlerWithEventName(EventName.ANIMATION_COMPLETE.value)
@@ -234,7 +254,6 @@ open class Event : BaseEvent() {
             }
         }
     }
-
 
     private fun setEventsToRenderView() {
         getRenderView()?.also {

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,13 +15,15 @@
 
 package com.tencent.kuikly.demo.pages.demo
 
-import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.Color
-import com.tencent.kuikly.core.base.ColorStop
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewRef
-import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.views.Canvas
+import com.tencent.kuikly.core.views.CanvasView
+import com.tencent.kuikly.core.views.ImageView
+import com.tencent.kuikly.core.views.View
+import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 import kotlin.random.Random
 
@@ -71,7 +73,6 @@ internal class HotHeapExamplePage : BasePager() {
 
             }
 
-
         }
     }
 
@@ -84,7 +85,6 @@ internal class HotHeapExamplePage : BasePager() {
 //            ColorStop(Color(red255 = 0, green255 = 255, blue255 = 0, 0f), 1f))
 
     }
-
 
     fun generateRandomNumber(min: Int, max: Int): Int {
         return Random.nextInt(min, max + 1)

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,9 @@ package com.tencent.kuikly.core.render.android.adapter
 
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
+import com.tencent.kuikly.core.render.android.KuiklyRenderViewContext
+import com.tencent.kuikly.core.render.android.css.ktx.getDisplayMetrics
+import org.json.JSONObject
 
 /**
  * 图片加载适配器
@@ -30,8 +33,28 @@ interface IKRImageAdapter {
      * @param callback 回调
      *
      * @return 是否加载此图片类型
+     *
+     * 注意: 此方法可能在非UI线程调用，例如在[MemoryCacheModule.cacheImage]中。
+     * 实现时需要注意线程安全，如果需要在UI线程操作，请使用Handler或runOnUiThread等方式切换到UI线程。
      */
+    @Deprecated("请使用带有 imageParams 参数的新方法，override 新方法后，本方法将不再被调用")
     fun fetchDrawable(imageLoadOption: HRImageLoadOption, callback: (drawable: Drawable?) -> Unit)
+
+    /**
+     * 根据[HRImageLoadOption]来加载图片
+     *
+     * @param imageLoadOption 图片加载选项
+     * @param imageParams 图片额外参数
+     * @param callback 回调
+     *
+     * @return 是否加载此图片类型
+     *
+     * 注意: 此方法可能在非UI线程调用，例如在[MemoryCacheModule.cacheImage]中。
+     * 实现时需要注意线程安全，如果需要在UI线程操作，请使用Handler或runOnUiThread等方式切换到UI线程。
+     */
+    fun fetchDrawable(imageLoadOption: HRImageLoadOption, imageParams: JSONObject?, callback: (drawable: Drawable?) -> Unit) {
+        fetchDrawable(imageLoadOption, callback)
+    }
 
     /**
      * 是否需要等待首屏完成后再加载
@@ -39,6 +62,22 @@ interface IKRImageAdapter {
      */
     val shouldWaitViewDidLoad: Boolean
         get() = true
+
+    /**
+     * 返回图片的宽度px值，如果[fetchDrawable]返回图片经过了density缩放，可以重载此方法返回正确的px值
+     */
+    fun getDrawableWidth(kuiklyRenderViewContext: KuiklyRenderViewContext, drawable: Drawable): Float {
+        // 为了兼容旧版，这里默认乘以density
+        return drawable.intrinsicWidth.toFloat() * kuiklyRenderViewContext.getDisplayMetrics().density
+    }
+
+    /**
+     * 返回图片的高度px值，如果[fetchDrawable]返回图片经过了density缩放，可以重载此方法返回正确的px值
+     */
+    fun getDrawableHeight(kuiklyRenderViewContext: KuiklyRenderViewContext, drawable: Drawable): Float {
+        // 为了兼容旧版，这里默认乘以density
+        return drawable.intrinsicHeight.toFloat() * kuiklyRenderViewContext.getDisplayMetrics().density
+    }
 
 }
 

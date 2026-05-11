@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -35,32 +35,35 @@ import kotlin.properties.ReadWriteProperty
 @Deprecated(
     "use PagerScope.observable(mode, value) instead",
     ReplaceWith(
-        "observable<T>(ObservableThreadSafetyMode.NONE, init)",
-        "com.tencent.kuikly.core.reactive.ObservableThreadSafetyMode"
+        "scope.observable<T>(init)",
+        "com.tencent.kuikly.core.base.PagerScope"
     )
 )
 fun <T> observable(init: T): ReadWriteProperty<Any, T> {
+    @Suppress("DEPRECATION")
     return ReactiveObserver.observable(init)
 }
 
 // 列表容器   用法：var listProp: ObservableList<String>  by observableList<String>()
 @Deprecated("use PagerScope.observableList(mode) instead",
     ReplaceWith(
-        "observableList<T>(ObservableThreadSafetyMode.NONE)",
-        "com.tencent.kuikly.core.reactive.ObservableThreadSafetyMode"
+        "scope.observableList<T>()",
+        "com.tencent.kuikly.core.base.PagerScope"
     )
 )
 fun <T> observableList(): ReadWriteProperty<Any, ObservableList<T>> {
+    @Suppress("DEPRECATION")
     return ReactiveObserver.observableList()
 }
 
 @Deprecated("use PagerScope.observableSet(mode) instead",
     ReplaceWith(
-        "observableSet<T>(ObservableThreadSafetyMode.NONE)",
-        "com.tencent.kuikly.core.reactive.ObservableThreadSafetyMode"
+        "scope.observableSet<T>()",
+        "com.tencent.kuikly.core.base.PagerScope"
     )
 )
 fun <T> observableSet(): ReadWriteProperty<Any, ObservableSet<T>> {
+    @Suppress("DEPRECATION")
     return ReactiveObserver.observableSet()
 }
 

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -28,6 +28,7 @@ typedef NS_OPTIONS(int, KRPageState) {
 
 @property (nonatomic, assign) KRPageState pageState;
 @property (nonatomic, assign) KRMonitorType monitorType;
+@property (nonatomic, assign) NSInteger modeId;
 
 /// key stage, value timespam（单位毫秒）
 @property (nonatomic, readonly) NSDictionary<NSNumber *, NSNumber *> *stageStartTimes;
@@ -45,6 +46,7 @@ typedef NS_OPTIONS(int, KRPageState) {
 
 - (void)mergeKotlinCreatePageTime:(NSDictionary *)params;
 
+- (NSDictionary*)performanceData;
 @end
 
 NS_ASSUME_NONNULL_END

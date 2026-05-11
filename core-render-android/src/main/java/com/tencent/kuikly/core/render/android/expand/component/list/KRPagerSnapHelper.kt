@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -120,10 +120,14 @@ internal class KRPagerSnapHelper(
         }
     }
 
-    private fun snapFromFling(velocityX: Int, velocityY: Int): Boolean {
+    fun snapFromFling(velocityX: Int, velocityY: Int): Boolean {
         val layoutManager = krRecyclerView?.layoutManager ?: return false
         val distances = distanceToSnapFromFling(layoutManager, velocityX, velocityY)
-        krRecyclerView?.smoothScrollBy(distances[0], distances[1])
+        if (distances[0] != 0 || distances[1] != 0) {
+            krRecyclerView?.smoothScrollBy(distances[0], distances[1])
+        } else {
+            krRecyclerView?.stopScroll()
+        }
         return true
     }
 

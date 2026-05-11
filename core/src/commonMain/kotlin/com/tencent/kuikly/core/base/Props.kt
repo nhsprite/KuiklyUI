@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,10 +18,9 @@ package com.tencent.kuikly.core.base
 import com.tencent.kuikly.core.collection.fastLinkedMapOf
 import com.tencent.kuikly.core.collection.toFastMap
 import com.tencent.kuikly.core.layout.Frame
-import com.tencent.kuikly.core.manager.PagerManager
-import com.tencent.kuikly.core.pager.IPager
 import com.tencent.kuikly.core.pager.PageData
 import com.tencent.kuikly.core.reactive.ReactiveObserver
+import com.tencent.kuikly.core.utils.checkThread
 
 internal typealias FrameTask = (frame: Frame) -> Unit
 
@@ -69,11 +68,16 @@ abstract class Props : BaseObject(), IPagerId {
     }
 
     fun setProp(propKey: String, propValue: Any) {
+        checkThread("attr", "access")
         if (propsMap[propKey] == propValue && !forceUpdate) {
-            return;
+            return
         }
         propsMap[propKey] = propValue
         view()?.didSetProp(propKey, propValue)
+    }
+
+    fun updatePropCache(propKey: String, propValue: Any) {
+        propsMap[propKey] = propValue
     }
 
     fun setNeedLayout() {
@@ -82,10 +86,11 @@ abstract class Props : BaseObject(), IPagerId {
 
     fun setPropsToRenderView() {
         view()?.also {
-            // 当有圆角和阴影同时存在时 或 有背景渐变的叶子节点时，需要wrapperBoxShadowView兼容对齐安卓表现
-            if (getPager().pageData.isIOS
+            // 当有圆角和阴影同时存在时 或 有clipPath和阴影同时存在时 或 有背景渐变的叶子节点时，需要wrapperBoxShadowView兼容对齐安卓表现
+            // iOS 上 layer.mask 会裁剪 layer.shadow，所以需要 wrapper view 来分离阴影和裁剪
+            if ((getPager().pageData.isIOS || getPager().pageData.isMacOS)
                 && ((propsMap.containsKey(Attr.StyleConst.BOX_SHADOW)
-                && propsMap.containsKey(Attr.StyleConst.BORDER_RADIUS))
+                && (propsMap.containsKey(Attr.StyleConst.BORDER_RADIUS) || propsMap.containsKey(Attr.StyleConst.CLIP_PATH)))
                 || (propsMap.containsKey(Attr.StyleConst.BACKGROUND_IMAGE) && (it !is ViewContainer<*, *>)))) {
                 it.syncProp(Attr.StyleConst.WRAPPER_BOX_SHADOW_VIEW, 1)
             }
@@ -112,5 +117,3 @@ abstract class Props : BaseObject(), IPagerId {
         return null
     }
 }
-
-

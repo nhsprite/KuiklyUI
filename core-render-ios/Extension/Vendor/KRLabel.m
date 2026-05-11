@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,7 +18,7 @@
 #import <libkern/OSAtomic.h>
 #import "KRAsyncDeallocManager.h"
 #import <objc/runtime.h>
-
+#import "NSObject+KR.h"
 
 #define KRAssertMainThread() NSAssert(0 != pthread_main_np(), @"This method must be called on the main thread!")
 NSString *const KRHighlightAttributeKey = @"KRHighlightAttributeKey";
@@ -78,11 +78,15 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
     return [self sizeThatFits:size attributedString:attString numberOfLines:lines lineBreakMode:mode lineBreakMarin:0];
 }
 
-+ (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode lineBreakMarin:(CGFloat)marin{
++ (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode lineBreakMarin:(CGFloat)marin {
+    return [self sizeThatFits:size attributedString:attString numberOfLines:lines lineBreakMode:mode lineBreakMarin:0 lineHeight:0];
+}
+
++ (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode lineBreakMarin:(CGFloat)marin lineHeight:(CGFloat)lineHeight {
     attString = [attString isKindOfClass:[NSAttributedString class]] ? attString : [[NSAttributedString alloc] initWithString:@""];
     NSTextStorage *textStorage = [[NSTextStorage alloc] initWithAttributedString:[attString copy]];
     textStorage.hr_hasAttachmentViews = attString.hr_hasAttachmentViews;
-    KRTextRender *textRender = [[KRTextRender alloc] initWithTextStorage:textStorage];
+    KRTextRender *textRender = [[KRTextRender alloc] initWithTextStorage:textStorage lineHeight:lineHeight];
     textRender.lineBreakMargin = marin;
     textRender.maximumNumberOfLines = lines;
     textRender.lineBreakMode = mode;
@@ -93,18 +97,96 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
         textRender.isBreakLine = !CGSizeEqualToSize(fitSize, newSize);
         textRender.maximumNumberOfLines = lines;//复原
     }
+    
+    // Fix the issue of missing ellipsis caused by hard line breaks (aligned with Android/HarmonyOS)
+    // Remove this logic if Apple fixes this issue in the future.
+    BOOL didModify = [self kr_fixEllipsisIfNeededForTextStorage:textStorage textRender:textRender lines:lines mode:mode fitSize:fitSize];
+    if (didModify) {
+        // Recalculate fitSize after modifying textStorage
+        fitSize = [textRender textSizeWithRenderWidth:size.width];
+    }
+    
     attString.hr_textRender = textRender;
     attString.hr_size = fitSize;
     
     return fitSize;
 }
 
-
-
-- (void)dealloc {
-   
+/// Fix the issue where iOS TextKit does not display ellipsis after hard line breaks
+/// When text is truncated by line count limit,
+/// but the last line ends with \n instead of width overflow, the system does not add ellipsis.
+/// This method detects this situation and manually adds ellipsis to align with Android/HarmonyOS behavior
+/// @return YES if textStorage was modified, NO otherwise
++ (BOOL)kr_fixEllipsisIfNeededForTextStorage:(NSTextStorage *)textStorage
+                                  textRender:(KRTextRender *)textRender
+                                       lines:(NSUInteger)lines
+                                        mode:(NSLineBreakMode)mode
+                                     fitSize:(CGSize)fitSize {
+    // Only handle the mode that requires truncation with ellipsis
+    if (mode != NSLineBreakByTruncatingTail || lines == 0) {
+        return NO;
+    }
+    
+    NSLayoutManager *layoutManager = textRender.layoutManager;
+    NSUInteger numberOfGlyphs = [layoutManager numberOfGlyphs];
+    if (numberOfGlyphs == 0) {
+        return NO;
+    }
+    
+    // Enumerate lines and use rect to determine which lines are actually visible
+    __block NSUInteger visibleLineCount = 0;
+    __block NSRange lastVisibleLineGlyphRange = NSMakeRange(0, 0);
+    __block BOOL hasMoreFragments = NO;
+    [layoutManager enumerateLineFragmentsForGlyphRange:NSMakeRange(0, numberOfGlyphs)
+                                            usingBlock:^(CGRect rect, CGRect usedRect,
+                                                         NSTextContainer *container, NSRange glyphRange, BOOL *stop) {
+        // Check if this line fragment is within the visible area
+        if (rect.origin.y + rect.size.height <= fitSize.height + 0.5) { // Add small tolerance for floating point
+            visibleLineCount++;
+            lastVisibleLineGlyphRange = glyphRange;
+            if (visibleLineCount >= lines) {
+                *stop = YES;
+            }
+        } else {
+            // This fragment is outside visible area
+            hasMoreFragments = YES;
+            *stop = YES;
+        }
+    }];
+    
+    // If no lines reached the limit and no more fragments, text is fully visible
+    if (!hasMoreFragments && (lastVisibleLineGlyphRange.location + lastVisibleLineGlyphRange.length >= numberOfGlyphs)) {
+        return NO;
+    }
+    
+    // Check if system has already added ellipsis
+    NSRange lastLineCharRange = [layoutManager characterRangeForGlyphRange:lastVisibleLineGlyphRange actualGlyphRange:nil];
+    NSUInteger lastVisibleCharIndex = lastLineCharRange.location + lastLineCharRange.length;
+    NSRange truncatedRange = [layoutManager truncatedGlyphRangeInLineFragmentForGlyphAtIndex:lastVisibleLineGlyphRange.location];
+    if (truncatedRange.location != NSNotFound) {
+        return NO;
+    }
+    
+    // Ellipsis need to be added manually
+    // Only remove the last newline character (not all trailing newlines)
+    // to preserve line structure and show ellipsis on the correct line
+    NSUInteger endIndex = lastVisibleCharIndex;
+    NSString *text = textStorage.string;
+    if (endIndex > 0 && ([text characterAtIndex:endIndex - 1] == '\n' || [text characterAtIndex:endIndex - 1] == '\r')) {
+        endIndex--;
+    }
+    
+    if (endIndex == 0) {
+        return NO;
+    }
+    
+    // Add ellipsis at the end of visible text
+    NSDictionary *attrs = [textStorage attributesAtIndex:endIndex - 1 effectiveRange:nil];
+    NSMutableAttributedString *newText = [[textStorage attributedSubstringFromRange:NSMakeRange(0, endIndex)] mutableCopy];
+    [newText appendAttributedString:[[NSAttributedString alloc] initWithString:@"…" attributes:attrs]];
+    [textStorage replaceCharactersInRange:NSMakeRange(0, textStorage.length) withAttributedString:newText];
+    return YES;
 }
-
 
 
 
@@ -112,7 +194,7 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
 
 @end
 //---------KRTextRender类分割线------------
-@interface KRTextRender(){
+@interface KRTextRender() <NSLayoutManagerDelegate> {
     CGRect _textBound;
 }
 @property (nonatomic, strong) KRLayoutManager * layoutManager;
@@ -128,6 +210,7 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
     if (self = [super init]) {
         _textContainer = [NSTextContainer new];
         _layoutManager = [KRLayoutManager new];
+        _layoutManager.delegate = self;
         [_layoutManager addTextContainer:_textContainer];
         _textContainer.lineFragmentPadding = 0;
     }
@@ -141,11 +224,16 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
     return self;
 }
 
-- (instancetype)initWithTextStorage:(NSTextStorage *)textStorage{
+- (instancetype)initWithTextStorage:(NSTextStorage *)textStorage lineHeight:(CGFloat)lineHeight {
     if (self = [self init]) {
+        self.lineHeight = lineHeight;
         self.textStorage = textStorage;
     }
     return self;
+}
+
+- (instancetype)initWithTextStorage:(NSTextStorage *)textStorage{
+    return [self initWithTextStorage:textStorage lineHeight:0];
 }
 #pragma mark - Getter && Setter
 
@@ -226,6 +314,10 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
 - (CGSize)textSizeWithRenderWidth:(CGFloat)renderWidth{
     if (!_textStorageOnRender)  return CGSizeZero;
     _textContainer.size = CGSizeMake(renderWidth, MAXFLOAT);
+#if TARGET_OS_OSX // [macOS NSLayoutManager needs explicit layout trigger
+    // Force layout to ensure usedRectForTextContainer returns correct size
+    [_layoutManager ensureLayoutForTextContainer:_textContainer];
+#endif // macOS]
     CGSize textSize = [self textBound].size;
     CGSize res = CGSizeMake(ceil(textSize.width), ceil(textSize.height));
     return  res;
@@ -253,6 +345,135 @@ NSString *const KRBGAttributeKey = @"KRBGAttributeKey";
     [[KRAsyncDeallocManager shareManager] asyncDeallocWithObject:_textContainer];
 
 }
+
+#pragma mark - layout manager delegate
+- (BOOL)layoutManager:(NSLayoutManager *)layoutManager shouldSetLineFragmentRect:(inout CGRect *)lineFragmentRect lineFragmentUsedRect:(inout CGRect *)lineFragmentUsedRect baselineOffset:(inout CGFloat *)baselineOffset inTextContainer:(NSTextContainer *)textContainer forGlyphRange:(NSRange)glyphRange {
+    
+    if (_lineHeight > 0) {
+        UIFont *font;
+        NSParagraphStyle *style;
+        NSArray *attrsList = [self attributesListForGlyphRange:glyphRange layoutManager:layoutManager];
+        [self getFont:&font paragraphStyle:&style fromAttibutesList:attrsList];
+
+        if (![font isKindOfClass:[UIFont class]]) {
+            return NO;
+        }
+
+        UIFont *defaultFont = [self systemDefaultFontForFont:font];
+
+        CGRect rect = *lineFragmentRect;
+        CGRect usedRect = *lineFragmentUsedRect;
+        
+        CGFloat textLineHeight = _lineHeight;
+        CGFloat fixedBaseLineOffset = [self.class baseLineOffsetForLineHeight:textLineHeight font:defaultFont];
+        
+        rect.size.height = textLineHeight;
+        usedRect.size.height = MAX(textLineHeight, usedRect.size.height);
+        
+        *lineFragmentRect = rect;
+        *lineFragmentUsedRect = usedRect;
+        *baselineOffset = fixedBaseLineOffset;
+    }
+    
+    return YES;
+}
+
++ (CGFloat)lineHeightForFont:(UIFont *)font paragraphStyle:(NSParagraphStyle *)style  {
+    CGFloat lineHeight = font.lineHeight;
+    if (!style) {
+        return lineHeight;
+    }
+    if (style.lineHeightMultiple > 0) {
+        lineHeight *= style.lineHeightMultiple;
+    }
+    if (style.minimumLineHeight > 0) {
+        lineHeight = MAX(style.minimumLineHeight, lineHeight);
+    }
+    if (style.maximumLineHeight > 0) {
+        lineHeight = MIN(style.maximumLineHeight, lineHeight);
+    }
+    return lineHeight;
+}
+
+
++ (CGFloat)baseLineOffsetForLineHeight:(CGFloat)lineHeight font:(UIFont *)font {
+    CGFloat baseLine = lineHeight + font.descender / 2;
+    return baseLine;
+}
+
+/// get system default font of size
+- (UIFont *)systemDefaultFontForFont:(UIFont *)font {
+    return [UIFont systemFontOfSize:font.pointSize];
+}
+
+
+- (NSArray<NSDictionary *> *)attributesListForGlyphRange:(NSRange)glyphRange layoutManager:(NSLayoutManager *)layoutManager {
+
+    // exclude the line break. System doesn't calucate the line rect with it.
+    if (glyphRange.length > 1) {
+        NSGlyphProperty property = [layoutManager propertyForGlyphAtIndex:glyphRange.location + glyphRange.length - 1];
+        if (property & NSGlyphPropertyControlCharacter) {
+            glyphRange = NSMakeRange(glyphRange.location, glyphRange.length - 1);
+        }
+    }
+
+    
+    NSTextStorage *textStorage = layoutManager.textStorage;
+    NSRange targetRange = [layoutManager characterRangeForGlyphRange:glyphRange actualGlyphRange:nil];
+    NSMutableArray *dicts = [NSMutableArray arrayWithCapacity:2];
+
+    NSInteger last = -1;
+    NSRange effectRange = NSMakeRange(targetRange.location, 0);
+
+    while (effectRange.location + effectRange.length < targetRange.location + targetRange.length) {
+        NSInteger current = effectRange.location + effectRange.length;
+        // if effectRange didn't advanced, we manuly add 1 to avoid infinate loop.
+        if (current <= last) {
+            current += 1;
+        }
+        NSDictionary *attributes = [textStorage attributesAtIndex:current effectiveRange:&effectRange];
+        if (attributes) {
+            [dicts addObject:attributes];
+        }
+        last = current;
+    }
+
+    return dicts;
+}
+
+- (void)getFont:(UIFont **)returnFont paragraphStyle:(NSParagraphStyle **)returnStyle fromAttibutesList:(NSArray<NSDictionary *> *)attributesList {
+
+    if (attributesList.count == 0) {
+        return;
+    }
+
+    UIFont *findedFont = nil;
+    NSParagraphStyle *findedStyle = nil;
+    CGFloat lastHeight = -CGFLOAT_MAX;
+
+    // find the attributes with max line height
+    for (NSInteger i = 0; i < attributesList.count; i++) {
+        NSDictionary *attrs = attributesList[i];
+
+        NSParagraphStyle *style = attrs[NSParagraphStyleAttributeName];
+        UIFont *font = attrs[NSFontAttributeName];
+
+        if ([font isKindOfClass:[UIFont class]] &&
+            (!style || [style isKindOfClass:[NSParagraphStyle class]]) ) {
+
+            CGFloat height = [self.class lineHeightForFont:font paragraphStyle:style];
+            if (height > lastHeight) {
+                lastHeight = height;
+                findedFont = font;
+                findedStyle = style;
+            }
+        }
+    }
+
+    *returnFont = findedFont;
+    *returnStyle = findedStyle;
+}
+
 
 @end
 

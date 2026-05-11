@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,12 +23,11 @@ import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.attr.ImageUri
 import com.tencent.kuikly.core.coroutines.launch
 import com.tencent.kuikly.core.log.KLog
-import com.tencent.kuikly.core.views.Blur
 import com.tencent.kuikly.core.views.Image
-import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
+
 @Page("BlurViewDemoPage")
 internal class BlurViewDemoPage : BasePager() {
     override fun body(): ViewBuilder {

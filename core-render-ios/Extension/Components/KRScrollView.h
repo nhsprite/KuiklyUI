@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,16 +13,30 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewExportProtocol.h"
+#import "NestedScrollCoordinator.h"
+#import "NestedScrollProtocol.h"
+#import "KRTurboDisplayStateRestorableProtocol.h"
+
+#import "KRView.h"
 NS_ASSUME_NONNULL_BEGIN
 
 /*
  * @brief 暴露给Kotlin侧调用的Scoller组件
  */
-@interface KRScrollView : UIScrollView<KuiklyRenderViewExportProtocol, UIScrollViewDelegate>
+@interface KRScrollView : UIScrollView<KuiklyRenderViewExportProtocol, UIScrollViewDelegate, NestedScrollProtocol, KRTurboDisplayStateRestorableProtocol>
 
 @property (nonatomic, assign) BOOL autoAdjustContentOffsetDisable ;
+@property (nonatomic, assign) BOOL setContentSizeing ;
+@property (nonatomic, assign) BOOL skipNestScrollLock;
+
+/// Record the last content offset for scroll lock.
+@property (nonatomic, assign) CGPoint lastContentOffset;
+
+/// Nested scroll coordinator
+@property (nonatomic, strong) NestedScrollCoordinator *nestedScrollCoordinator;
+
 /*
  * 添加滚动监听
  */
@@ -40,7 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-@interface KRScrollContentView : UIView<KuiklyRenderViewExportProtocol>
+@interface KRScrollContentView : KRView<KuiklyRenderViewExportProtocol>
 /*
  * 添加滚动监听
  */

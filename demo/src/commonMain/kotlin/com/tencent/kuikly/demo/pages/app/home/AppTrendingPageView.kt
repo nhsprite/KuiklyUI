@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,15 +15,17 @@
 
 package com.tencent.kuikly.demo.pages.app.home
 
-import com.tencent.kuikly.core.base.Color
 import com.tencent.kuikly.core.base.ComposeView
 import com.tencent.kuikly.core.base.ComposeAttr
 import com.tencent.kuikly.core.base.ComposeEvent
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.ViewRef
+import com.tencent.kuikly.core.module.CallbackRef
+import com.tencent.kuikly.core.module.NotifyModule
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import com.tencent.kuikly.core.reactive.handler.observable
+import com.tencent.kuikly.core.reactive.handler.observableList
 import com.tencent.kuikly.core.views.PageList
 import com.tencent.kuikly.core.views.PageListView
 import com.tencent.kuikly.core.views.ScrollParams
@@ -32,14 +34,15 @@ import com.tencent.kuikly.core.views.Tabs
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.app.AppTabPage
+import com.tencent.kuikly.demo.pages.app.lang.LangManager
 import com.tencent.kuikly.demo.pages.app.model.AppFeedsType
+import com.tencent.kuikly.demo.pages.app.theme.ThemeManager
 
 internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTrendingPageViewEvent>() {
 
     private var curIndex: Int by observable(0)
     private var scrollParams: ScrollParams? by observable(null)
     private var pageListRef : ViewRef<PageListView<*, *>>? = null
-    private val pageTitles = listOf<String>("推荐", "附近", "榜单", "明星", "搞笑", "社会","测试")
     private val pageTypes = listOf<AppFeedsType>(
         AppFeedsType.Recommend,
         AppFeedsType.Nearby,
@@ -50,6 +53,51 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
         AppFeedsType.Test,
     )
     private var viewRefs: MutableList<ViewRef<AppFeedListPageView>> = mutableListOf()
+    private var theme by observable(ThemeManager.getTheme())
+    private var resStrings by observable(LangManager.getCurrentResStrings())
+    private lateinit var themeEventCallbackRef: CallbackRef
+    private lateinit var langEventCallbackRef: CallbackRef
+    private var pageTitles by observableList<String>()
+
+    private fun updateLangResources() {
+        resStrings = LangManager.getCurrentResStrings()
+        pageTitles[0] = resStrings.topBarRecommend
+        pageTitles[1] = resStrings.topBarNearby
+        pageTitles[2] = resStrings.topBarRanking
+        pageTitles[3] = resStrings.topBarCelebrity
+        pageTitles[4] = resStrings.topBarEntertain
+        pageTitles[5] = resStrings.topBarSociety
+        pageTitles[6] = resStrings.topBarTest
+    }
+
+    override fun created() {
+        super.created()
+        pageTitles.addAll(arrayOf(
+            resStrings.topBarRecommend,
+            resStrings.topBarNearby,
+            resStrings.topBarRanking,
+            resStrings.topBarCelebrity,
+            resStrings.topBarEntertain,
+            resStrings.topBarSociety,
+            resStrings.topBarTest
+        ))
+        themeEventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(ThemeManager.SKIN_CHANGED_EVENT) { _ ->
+                theme = ThemeManager.getTheme()
+            }
+        langEventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(LangManager.LANG_CHANGED_EVENT) { _ ->
+                updateLangResources()
+            }
+    }
+
+    override fun viewWillUnload() {
+        super.viewWillUnload()
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, themeEventCallbackRef)
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, langEventCallbackRef)
+    }
 
     internal fun loadFirstFeeds() {
         this.viewRefs.first().view?.loadFirstFeeds()
@@ -70,7 +118,7 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
                 attr {
                     height(TAB_HEADER_HEIGHT)
                     defaultInitIndex(ctx.curIndex)
-                    backgroundColor(Color.WHITE)
+                    backgroundColor(ctx.theme.colors.topBarNestedBackground)
                     ctx.scrollParams?.also {
                         scrollParams(it)
                     }
@@ -78,7 +126,7 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
                         View {}
                     }
                 }
-                for (i in 0 until ctx.pageTitles.size) {
+                for (i in ctx.pageTitles.indices) {
                     TabItem { state ->
                         attr {
                             marginLeft(18f)
@@ -94,11 +142,8 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
                             attr {
                                 text(ctx.pageTitles[i])
                                 fontSize(17f)
-                                if (state.selected) {
-                                    color(Color.RED)
-                                } else {
-                                    color(Color.GRAY)
-                                }
+                                color(if (state.selected) ctx.theme.colors.topBarNestedTextFocused
+                                else ctx.theme.colors.topBarNestedTextUnfocused)
                             }
                         }
                     }
@@ -109,6 +154,9 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
 
     override fun body(): ViewBuilder {
         val ctx = this
+        val isIOS = getPager().pageData.isIOS
+        val tabBottomHeight = if (isIOS) 0f else AppTabPage.TAB_BOTTOM_HEIGHT
+
         return {
             ctx.tabsHeader().invoke(this)
             PageList {
@@ -118,7 +166,7 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
                 attr {
                     flexDirectionRow()
                     pageItemWidth(pagerData.pageViewWidth)
-                    pageItemHeight(pagerData.pageViewHeight - pagerData.statusBarHeight - AppHomePageView.TAB_HEADER_HEIGHG - AppTabPage.TAB_BOTTOM_HEIGHT - TAB_HEADER_HEIGHT)
+                    pageItemHeight(pagerData.pageViewHeight - pagerData.statusBarHeight - AppHomePageView.TAB_HEADER_HEIGHT - tabBottomHeight - TAB_HEADER_HEIGHT)
                     defaultPageIndex(ctx.curIndex)
                     showScrollerIndicator(false)
                 }
@@ -150,13 +198,12 @@ internal class AppTrendingPageView: ComposeView<AppTrendingPageViewAttr, AppTren
     }
 }
 
-
 internal class AppTrendingPageViewAttr : ComposeAttr() {
 
 }
 
 internal class AppTrendingPageViewEvent : ComposeEvent() {
-    
+
 }
 
 internal fun ViewContainer<*, *>.AppTrendingPage(init: AppTrendingPageView.() -> Unit) {

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 package com.tencent.kuikly.core.log
 
 import com.tencent.kuikly.core.manager.BridgeManager
+import com.tencent.kuikly.core.manager.PagerManager
 
 /*
  * @brief 日志模块，支持宿主自定义实现具体打印接口
@@ -40,7 +41,10 @@ object KLog {
         logToNative(METHOD_LOG_ERROR, "[KLog][$tag]:$msg")
     }
     private fun logToNative(method: String, msg: String) {
+        val trace = PagerManager.getPagerEventTrace(BridgeManager.currentPageId)
+        trace?.onCallModuleStart(MODULE_NAME, method, true, 0)
         BridgeManager.callModuleMethod(BridgeManager.currentPageId, MODULE_NAME, method, msg, null, 1)
+        trace?.onCallModuleEnd(MODULE_NAME, method, true, 0)
     }
 
     private const val MODULE_NAME = "KRLogModule"

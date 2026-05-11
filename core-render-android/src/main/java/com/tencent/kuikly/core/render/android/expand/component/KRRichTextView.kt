@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -34,6 +34,8 @@ import android.text.TextUtils
 import android.text.style.LeadingMarginSpan
 import android.util.SizeF
 import android.view.ViewGroup
+import com.tencent.kuikly.core.render.android.IKuiklyRenderContext
+import com.tencent.kuikly.core.render.android.IKuiklyRenderContextWrapper
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 import com.tencent.kuikly.core.render.android.adapter.TextPostProcessorInput
 import com.tencent.kuikly.core.render.android.const.KRCssConst
@@ -42,9 +44,10 @@ import com.tencent.kuikly.core.render.android.const.KRViewConst
 import com.tencent.kuikly.core.render.android.css.decoration.BoxShadow
 import com.tencent.kuikly.core.render.android.css.ktx.*
 import com.tencent.kuikly.core.render.android.expand.component.text.*
-import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import com.tencent.kuikly.core.render.android.export.IKuiklyRenderShadowExport
+import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import org.json.JSONArray
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -125,8 +128,8 @@ class KRRichTextView(context: Context) : KRView(context) {
     private fun createRichTextCallbackParams(result: Any?): Map<String, Any> {
         val map = result as Map<String, Any>
         // 1.获取点击的坐标位置
-        val x = (map[KRViewConst.X] as? Float)?.toPxF() ?: 0f
-        val y = (map[KRViewConst.Y] as? Float)?.toPxF()?.toInt() ?: 0
+        val x = kuiklyRenderContext.toPxF((map[KRViewConst.X] as? Float) ?: 0f)
+        val y = kuiklyRenderContext.toPxF((map[KRViewConst.Y] as? Float) ?: 0f).toInt()
 
         // 2. 计算spanIndex
         var spanIndex = -1
@@ -196,7 +199,7 @@ class KRRichTextView(context: Context) : KRView(context) {
 /**
  * 文本相关属性
  */
-open class KRTextProps {
+open class KRTextProps(private val kuiklyContext: IKuiklyRenderContext?) {
 
     companion object {
         const val PROP_KEY_NUMBER_OF_LINES = "numberOfLines"
@@ -342,7 +345,7 @@ open class KRTextProps {
     fun setProp(propKey: String, propValue: Any) {
         when (propKey) {
             PROP_KEY_NUMBER_OF_LINES -> numberOfLines = propValue as Int
-            PROP_KEY_LINE_BREAK_MARGIN -> lineBreakMargin = propValue.toNumberFloat().toPxF()
+            PROP_KEY_LINE_BREAK_MARGIN -> lineBreakMargin = kuiklyContext.toPxF(propValue.toNumberFloat())
             PROP_KEY_LINE_BREAK_MODE -> lineBreakMode = propValue as String
             PROP_KEY_VALUES -> values = JSONArray(propValue as String)
             PROP_KEY_TEXT -> text = propValue as String
@@ -350,7 +353,7 @@ open class KRTextProps {
             PROP_KEY_LETTER_SPACING -> letterSpacing = propValue.toNumberFloat()
             PROP_KEY_TEXT_DECORATION -> textDecoration = propValue as String
             PROP_KEY_TEXT_ALIGN -> textAlign = propValue as String
-            PROP_KEY_LINE_SPACING -> lineSpacing = propValue.toNumberFloat().toPxF()
+            PROP_KEY_LINE_SPACING -> lineSpacing = kuiklyContext.toPxI(propValue.toNumberFloat()).toFloat()
             PROP_KEY_FONT_WEIGHT -> fontWeight = propValue as String
             PROP_KEY_FONT_STYLE -> {
                 fontStyle = if (propValue as String == FONT_STYLE_ITALIC) {
@@ -361,12 +364,12 @@ open class KRTextProps {
             }
             PROP_KEY_FONT_FAMILY -> fontFamily = propValue as String
             PROP_KEY_FONT_SIZE -> fontSize = propValue.toNumberFloat()
-            PROP_KEY_LINE_HEIGHT -> lineHeight = propValue.toNumberFloat().toPxF()
+            PROP_KEY_LINE_HEIGHT -> lineHeight = kuiklyContext.toPxF(propValue.toNumberFloat())
             PROP_KEY_BACKGROUND_IMAGE -> backgroundImage = propValue as String
-            PROP_KEY_HEAD_INDENT -> richTextHeadIndent = propValue.toNumberFloat().toPxI()
+            PROP_KEY_HEAD_INDENT -> richTextHeadIndent = kuiklyContext.toPxI(propValue.toNumberFloat())
             PROP_KEY_TEXT_SHADOW -> {
                 if (propValue is String) {
-                    textShadow = BoxShadow(propValue)
+                    textShadow = BoxShadow(propValue, kuiklyContext)
                 }
             }
             PROP_KEY_TEXT_POST_PROCESSOR -> textPostProcessor = propValue as String
@@ -386,12 +389,12 @@ open class KRTextProps {
 /**
  * 富文本shadow对象，用于在子线程提前测量文本
  */
-class KRRichTextShadow : IKuiklyRenderShadowExport {
+class KRRichTextShadow : IKuiklyRenderShadowExport, IKuiklyRenderContextWrapper {
 
     /**
      * 文本属性
      */
-    private val textProps = KRTextProps()
+    private var textProps = KRTextProps(null)
 
     /**
      * 文本Layout, 目前实现为StaticLayout
@@ -401,19 +404,28 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
     /**
      * 是否是富文本形式
      */
-    var isRichTextMode = false
+    var isRichTextMode = false	
 
-    private var textPaint = TextPaint().apply {
-        isAntiAlias = true
-        isDither = true
-        color = Color.BLACK
-        textSize = textProps.fontSize.spToPxF()
+    private val textPaint by lazy {
+        // kuiklyRenderContext是在KRRichTextShadow创建后才赋值的，因此这里需要 lazy，保证获取textPaint
+        // 时，kuiklyRenderContext已经初始化
+        TextPaint().apply {
+            isAntiAlias = true
+            isDither = true
+            color = Color.BLACK
+            textSize = kuiklyRenderContext.spToPxI(textProps.fontSize).toFloat()
+        }
     }
 
     /**
      * 用于记录富文本中 DSL Span 对应的文本区间
      */
-    private val spanTextRanges: MutableList<SpanTextRange> = mutableListOf()
+    private var spanTextRanges: MutableList<SpanTextRange> = mutableListOf()
+
+    /**
+     * 上下文对象[IKuiklyRenderContext]
+     */
+    override var kuiklyRenderContext: IKuiklyRenderContext? = null
 
     /**
      *
@@ -462,7 +474,9 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
                 // layout可能会因为行高等因素导致文本截断
                 // 检查PlaceholderSpan的索引是否在文本布局范围内
                 val maxIndex = layout.getLineEnd(layout.lineCount - 1)
-                if (phSpanTextRange.start > maxIndex) {
+                // 需要考虑以...结尾等截断的情况，避免PlaceholderSpan和截断字符串重叠显示
+                val ellipsisCount = layout.getEllipsisCount(layout.lineCount - 1)
+                if (phSpanTextRange.start >= (maxIndex - ellipsisCount)) {
                     return rect
                 }
 
@@ -490,10 +504,10 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
                         // 行垂直中点
                         val lineMid = top + (bottom - lineSpace - top) / 2
                         // placeholder 矩形
-                        rect.left = x.toDpI()
-                        rect.right = (x + phWidth).toDpI()
-                        rect.top = (lineMid - phHeight / 2).toFloat().toDpI()
-                        rect.bottom = (lineMid + phHeight / 2).toFloat().toDpI()
+                        rect.left = kuiklyRenderContext.toDpI(x)
+                        rect.right = kuiklyRenderContext.toDpI(x + phWidth)
+                        rect.top = kuiklyRenderContext.toDpI((lineMid - phHeight / 2).toFloat())
+                        rect.bottom = kuiklyRenderContext.toDpI((lineMid + phHeight / 2).toFloat())
 
                     }
                 }
@@ -545,19 +559,21 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
             KRTextProps.TEXT_DECORATION_UNDERLINE -> textPaint.isUnderlineText = true
             KRTextProps.TEXT_DECORATION_LINE_THROUGH -> textPaint.isStrikeThruText = true
         }
-        if (textProps.fontWeight.isNotEmpty()) {
-            textPaint.style = Paint.Style.FILL_AND_STROKE
-            textPaint.strokeWidth = FontWeightSpan.getFontWeight(textProps.fontWeight)
-        }
-        textPaint.typeface = TypeFaceUtil.getTypeface(textProps.fontFamily, textProps.fontStyle == Typeface.ITALIC)
-        textPaint.textSize = if (textProps.useDpFontSizeDim) {
-            textProps.fontSize.toPxF()
+        val fontSize = if (textProps.useDpFontSizeDim) {
+            kuiklyRenderContext.toPxI(textProps.fontSize).toFloat()
         } else {
-            textProps.fontSize.spToPxF()
+            kuiklyRenderContext.spToPxI(textProps.fontSize).toFloat()
         }
+        if (textProps.fontWeight.isNotEmpty()) {
+            val strokeWidth = FontWeightSpan.getFontWeight(textProps.fontWeight) * fontSize
+            textPaint.style = if (strokeWidth > 0) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
+            textPaint.strokeWidth = strokeWidth
+        }
+        textPaint.typeface = kuiklyRenderContext?.getTypeFaceLoader()?.getTypeface(textProps.fontFamily,
+            textProps.fontStyle == Typeface.ITALIC)
+        textPaint.textSize = fontSize
         textPaint.color = textProps.color
-        textPaint.letterSpacing = textProps.letterSpacing.toPxF()
-
+        textPaint.letterSpacing = kuiklyRenderContext.toPxF(textProps.letterSpacing) / max(textPaint.textSize, 1f)
         val simpleText = SpannableStringBuilder(textProps.text)
         if (textProps.lineHeight != KRTextProps.UNSET_LINE_HEIGHT) {
             simpleText.setSpan(
@@ -601,15 +617,27 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
     }
 
     private fun buildRichText(): SpannableStringBuilder? {
-        spanTextRanges.clear()
-        val richTextBuilder = KRRichTextBuilder()
-        return richTextBuilder.build(textProps, spanTextRanges) {
+        updateTextPaintTextSize()
+
+        val newSpanTextRanges = mutableListOf<SpanTextRange>()
+        val richTextBuilder = KRRichTextBuilder(kuiklyRenderContext)
+        val result = richTextBuilder.build(textProps, newSpanTextRanges) {
             val layout = textLayout
             if (layout == null) {
                 SizeF(0f, 0f)
             } else {
                 SizeF(layout.width.toFloat(), layout.height.toFloat())
             }
+        }
+        spanTextRanges = newSpanTextRanges
+        return result
+    }
+
+    private fun updateTextPaintTextSize() {
+        textPaint.textSize = if (textProps.useDpFontSizeDim) {
+            kuiklyRenderContext.toPxI(textProps.fontSize).toFloat()
+        } else {
+            kuiklyRenderContext.spToPxI(textProps.fontSize).toFloat()
         }
     }
 
@@ -628,7 +656,7 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
     ): Layout {
         val textSource = if (textProps.textPostProcessor.isNotEmpty()) {
             KuiklyRenderAdapterManager.krTextPostProcessorAdapter?.onTextPostProcess(
-                TextPostProcessorInput(textProps.textPostProcessor, text, textProps)
+                kuiklyRenderContext, TextPostProcessorInput(textProps.textPostProcessor, text, textProps)
             )?.text ?: text
         } else {
             text
@@ -643,12 +671,17 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
             return if (textProps.lineBreakMargin == 0f || textProps.numberOfLines == 0) {
                 builder.build()
             } else {
-                val newBuilder = createStaticLayoutBuilder(textSource, desiredWidth)
-                newBuilder.setMaxLines(textProps.numberOfLines)
-                    .setEllipsize(TextUtils.TruncateAt.END)
-                    .setIndents(null, createLineBreakMarginArray(textProps))
-                textProps.isLineBreakMargin = true
-                newBuilder.build()
+                val staticLayout = builder.build()
+                if (staticLayout.lineCount > textProps.numberOfLines) {
+                    val newBuilder = createStaticLayoutBuilder(textSource, desiredWidth)
+                    newBuilder.setMaxLines(textProps.numberOfLines)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .setIndents(null, createLineBreakMarginArray(textProps))
+                    textProps.isLineBreakMargin = true
+                    newBuilder.build()
+                } else {
+                    staticLayout
+                }
             }
         } else {
             var staticLayout = StaticLayout(textSource, 0, textSource.length, textPaint, desiredWidth, getTextAlign(), 1.0f, textProps.lineSpacing, false)
@@ -675,7 +708,7 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
             textPaint,
             desiredWidth)
             .setAlignment(getTextAlign())
-            .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
+            .setTextDirection(TextDirectionHeuristics.LTR)
             .setLineSpacing(textProps.lineSpacing, 1.0f)
             .setIncludePad(false)
     }
@@ -737,4 +770,3 @@ class KRRichTextShadow : IKuiklyRenderShadowExport {
         private const val METHOD_IS_LINE_BREAK_MARGIN = "isLineBreakMargin"
     }
 }
-

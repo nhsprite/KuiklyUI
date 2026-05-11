@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewControllerBaseDelegator.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -23,7 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 /*
  * @brief View粒度入口类（业务可以使用该类作为kuikly接入层入口类）
  */
-@interface KuiklyBaseView : UIView
+@interface KuiklyBaseView : KRUIView // [macOS]
 /// 渲染根视图
 @property (nonatomic, strong, readonly, nullable) KuiklyRenderView *renderView;
 /// kuikly 标准的性能数据

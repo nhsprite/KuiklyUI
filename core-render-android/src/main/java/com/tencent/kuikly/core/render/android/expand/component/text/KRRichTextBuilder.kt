@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 package com.tencent.kuikly.core.render.android.expand.component.text
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
@@ -38,6 +39,7 @@ import android.text.style.TypefaceSpan
 import android.text.style.UnderlineSpan
 import android.text.style.UpdateAppearance
 import android.util.SizeF
+import com.tencent.kuikly.core.render.android.IKuiklyRenderContext
 import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.decoration.BoxShadow
 import com.tencent.kuikly.core.render.android.css.drawable.KRCSSBackgroundDrawable
@@ -51,12 +53,12 @@ import com.tencent.kuikly.core.render.android.expand.component.KRTextProps
 import org.json.JSONObject
 import kotlin.math.ceil
 import kotlin.math.floor
-
+import kotlin.math.max
 
 /**
  * 富文本构造器
  */
-class KRRichTextBuilder {
+class KRRichTextBuilder(private val kuiklyContext: IKuiklyRenderContext?) {
 
     /**
      * 构建富文本
@@ -76,10 +78,20 @@ class KRRichTextBuilder {
         }
         val spannedBuilder = SpannableStringBuilder()
         for (index in 0 until spanValues.length()) {
+            val isStart =
+                spannedBuilder.isEmpty() || spannedBuilder[spannedBuilder.lastIndex] == '\n'
             val spanValue = spanValues.optJSONObject(index) ?: JSONObject()
-            val spanProps = parseSpanProps(spanValue, textProps)
+            val spanProps = parseSpanProps(spanValue, textProps, isStart)
             val spans = createSpans(spanProps, index, layoutSizeGetter)
             if (spans.isNotEmpty()) {
+                if (spanProps is TextSpanProps && spanProps.adjustNewline) {
+                    // 对齐iOS、鸿蒙端表现，非空行的换行符不撑开行高
+                    spannedBuilder.append(
+                        "\n",
+                        AbsoluteSizeSpan(1),
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
                 spannedBuilder.append(buildSpannedString {
                     // 记录 Span 对应的文字范围
                     spanTextRanges.add(
@@ -110,11 +122,15 @@ class KRRichTextBuilder {
     /**
      * 解析 Span 参数
      */
-    private fun parseSpanProps(spanValue: JSONObject, defaultTextProps: KRTextProps) : SpanProps {
+    private fun parseSpanProps(
+        spanValue: JSONObject,
+        defaultTextProps: KRTextProps,
+        isStart: Boolean
+    ): SpanProps {
         if (isPlaceHolderSpan(spanValue)) {
-            return PlaceholderSpanProps(spanValue)
+            return PlaceholderSpanProps(spanValue, kuiklyContext)
         }
-        return  TextSpanProps(spanValue, defaultTextProps)
+        return TextSpanProps(spanValue, defaultTextProps, isStart, kuiklyContext)
     }
 
     /**
@@ -162,17 +178,18 @@ class KRRichTextBuilder {
 
         // 字体相关
         if (spanProps.fontSize > 0) {
-            textSpans.add(AbsoluteSizeSpan(if (spanProps.useDpFontSizeDim) spanProps.fontSize.toPxI() else {
-                spanProps.fontSize.spToPxI()
+            textSpans.add(AbsoluteSizeSpan(if (spanProps.useDpFontSizeDim) kuiklyContext.toPxI(spanProps.fontSize) else {
+                kuiklyContext.spToPxI(spanProps.fontSize)
             }))
         }
-        textSpans.add(FontWeightSpan(spanProps.fontWeight, index))
+        val fontWeightSpan = FontWeightSpan(spanProps.fontWeight, index)
+        textSpans.add(fontWeightSpan)
         textSpans.add(StyleSpan(spanProps.fontStyle))
         if (spanProps.fontVariant.isNotEmpty()) {
             textSpans.add(FontVariantSpan(spanProps.fontVariant))
         }
         if (spanProps.fontFamily.isNotEmpty()) {
-            textSpans.add(FontFamilySpan(spanProps.fontFamily))
+            textSpans.add(FontFamilySpan(spanProps.fontFamily, kuiklyContext?.getTypeFaceLoader()))
         }
 
         // 修饰相关
@@ -214,13 +231,16 @@ class KRRichTextBuilder {
 }
 
 abstract class SpanProps(spanValue: JSONObject) {
-    val text: String
-    init {
-        text = spanValue.optString(KRTextProps.PROP_KEY_TEXT, "")
-    }
+    protected val _text: String = spanValue.optString(KRTextProps.PROP_KEY_TEXT, "")
+    open val text: String get() = _text
 }
 
-class TextSpanProps(spanValue: JSONObject, defaultProps: KRTextProps) : SpanProps(spanValue) {
+class TextSpanProps(
+    spanValue: JSONObject,
+    defaultProps: KRTextProps,
+    isStart: Boolean,
+    kuiklyContext: IKuiklyRenderContext?
+) : SpanProps(spanValue) {
 
     val color: Int
     val fontSize: Float
@@ -234,6 +254,19 @@ class TextSpanProps(spanValue: JSONObject, defaultProps: KRTextProps) : SpanProp
     val backgroundImage: String
     var textShadow: BoxShadow? = null
     var useDpFontSizeDim = false
+
+    val adjustNewline by lazy(LazyThreadSafetyMode.NONE) {
+        !isStart && _text.isNotEmpty() && _text[0] == '\n'
+    }
+    private val _trimText by lazy(LazyThreadSafetyMode.NONE) {
+        if (adjustNewline) {
+            _text.substring(1)
+        } else {
+            _text
+        }
+    }
+
+    override val text: String get() = _trimText
 
     init {
         color = spanValue.optString(KRTextProps.PROP_KEY_COLOR).let { colorStr ->
@@ -254,25 +287,25 @@ class TextSpanProps(spanValue: JSONObject, defaultProps: KRTextProps) : SpanProp
         }
         fontVariant = spanValue.optString(KRTextProps.PROP_KEY_FONT_VARIANT)
         letterSpacing = if (spanValue.has(KRTextProps.PROP_KEY_LETTER_SPACING)) {
-            spanValue.optDouble(KRTextProps.PROP_KEY_LETTER_SPACING).toFloat().toPxF()
+            spanValue.optDouble(KRTextProps.PROP_KEY_LETTER_SPACING).toFloat() / max(fontSize, 1f)
         } else {
             defaultProps.letterSpacing
         }
         textDecoration = spanValue.optString(KRTextProps.PROP_KEY_TEXT_DECORATION, defaultProps.textDecoration)
         lineHeight = if (spanValue.has(KRTextProps.PROP_KEY_LINE_HEIGHT)) {
-            spanValue.optDouble(KRTextProps.PROP_KEY_LINE_HEIGHT).toFloat().toPxF()
+            kuiklyContext.toPxF(spanValue.optDouble(KRTextProps.PROP_KEY_LINE_HEIGHT).toFloat())
         } else {
             defaultProps.lineHeight
         }
         backgroundImage = spanValue.optString(KRTextProps.PROP_KEY_BACKGROUND_IMAGE, defaultProps.backgroundImage)
         val textShadowStr = spanValue.optString(KRTextProps.PROP_KEY_TEXT_SHADOW, "")
-        textShadow = BoxShadow(textShadowStr)
+        textShadow = BoxShadow(textShadowStr, kuiklyContext)
         useDpFontSizeDim = spanValue.optInt(KRTextProps.PROP_KEY_TEXT_USE_DP_FONT_SIZE_DIM) == 1
     }
 
 }
 
-class PlaceholderSpanProps(spanValue: JSONObject) : SpanProps(spanValue) {
+class PlaceholderSpanProps(spanValue: JSONObject, private val kuiklyContext: IKuiklyRenderContext?) : SpanProps(spanValue) {
 
     companion object {
         const val PROP_KEY_PLACEHOLDER_WIDTH = "placeholderWidth"
@@ -283,8 +316,8 @@ class PlaceholderSpanProps(spanValue: JSONObject) : SpanProps(spanValue) {
     val height: Int
 
     init {
-        width = spanValue.optDouble(PROP_KEY_PLACEHOLDER_WIDTH, 0.0).toFloat().toPxI()
-        height = spanValue.optDouble(PROP_KEY_PLACEHOLDER_HEIGHT, 0.0).toFloat().toPxI()
+        width = kuiklyContext.toPxI(spanValue.optDouble(PROP_KEY_PLACEHOLDER_WIDTH, 0.0).toFloat())
+        height = kuiklyContext.toPxI(spanValue.optDouble(PROP_KEY_PLACEHOLDER_HEIGHT, 0.0).toFloat())
     }
 
 }
@@ -310,7 +343,7 @@ class FontWeightSpan(fontWeight: String, val index: Int = -1) : CharacterStyle()
     override fun updateDrawState(tp: TextPaint) {
         if (strokeWidth != 0f) {
             tp.style = Paint.Style.FILL_AND_STROKE
-            tp.strokeWidth = strokeWidth
+            tp.strokeWidth = strokeWidth * tp.textSize
         }
     }
 
@@ -319,12 +352,16 @@ class FontWeightSpan(fontWeight: String, val index: Int = -1) : CharacterStyle()
         private const val FONT_WEIGHT_MEDIUM = "500"
         private const val FONT_WEIGHT_MEDIUM_BOLD = "600"
         private const val FONT_WEIGHT_BOLD = "700"
+        private const val FONT_WEIGHT_EXTRA_BOLD = "800"
+        private const val FONT_WEIGHT_BLACK = "900"
 
+        private const val SCALE = 50f
         private const val FONT_WEIGHT_NORMAL_VALUE = 0f
-        private const val FONT_WEIGHT_MEDIUM_VALUE = 0.75f
-        private const val FONT_WEIGHT_MEDIUM_BOLD_VALUE = 1f
-        private const val FONT_WEIGHT_BOLD_VALUE = 1.5f
-
+        private const val FONT_WEIGHT_MEDIUM_VALUE = 0.5f / SCALE
+        private const val FONT_WEIGHT_MEDIUM_BOLD_VALUE = 1f / SCALE
+        private const val FONT_WEIGHT_BOLD_VALUE = 1.5f / SCALE
+        private const val FONT_WEIGHT_EXTRA_BOLD_VALUE = 2f / SCALE
+        private const val FONT_WEIGHT_BLACK_VALUE = 2.5f / SCALE
 
         fun getFontWeight(fontWeight: String): Float {
             return when (fontWeight) {
@@ -332,6 +369,8 @@ class FontWeightSpan(fontWeight: String, val index: Int = -1) : CharacterStyle()
                 FONT_WEIGHT_MEDIUM -> FONT_WEIGHT_MEDIUM_VALUE
                 FONT_WEIGHT_MEDIUM_BOLD -> FONT_WEIGHT_MEDIUM_BOLD_VALUE
                 FONT_WEIGHT_BOLD -> FONT_WEIGHT_BOLD_VALUE
+                FONT_WEIGHT_EXTRA_BOLD -> FONT_WEIGHT_EXTRA_BOLD_VALUE
+                FONT_WEIGHT_BLACK -> FONT_WEIGHT_BLACK_VALUE
                 else -> FONT_WEIGHT_NORMAL_VALUE
             }
         }
@@ -372,12 +411,12 @@ class LetterSpacingSpan(private val letterSpacing: Float) : MetricAffectingSpan(
 /**
  * 字体span
  */
-class FontFamilySpan(fontFamily: String) : TypefaceSpan(KRCssConst.EMPTY_STRING) {
+class FontFamilySpan(fontFamily: String, typeFaceLoader: TypeFaceLoader?) : TypefaceSpan(KRCssConst.EMPTY_STRING) {
 
     private var tfe: Typeface? = null
 
     init {
-        tfe = TypeFaceUtil.getTypeface(fontFamily, false)
+        tfe = typeFaceLoader?.getTypeface(fontFamily, false)
     }
 
     override fun updateDrawState(ds: TextPaint) {
@@ -401,7 +440,7 @@ class FontFamilySpan(fontFamily: String) : TypefaceSpan(KRCssConst.EMPTY_STRING)
     }
 }
 
-class HRLineHeightSpan(private val height: Int) : LineHeightSpan {
+class HRLineHeightSpan(internal val height: Int) : LineHeightSpan {
 
     override fun chooseHeight(
         text: CharSequence?,
@@ -530,17 +569,12 @@ class KRPlaceholderSpan(private val spanProps: PlaceholderSpanProps): Replacemen
         end: Int,
         fm: Paint.FontMetricsInt?
     ): Int {
-        val fontMetrics = paint.getFontMetricsInt(null)
-        // 如果 placeholder 高度比字体大，调整 FontMetrics 进行占位
-        if (spanProps.height > fontMetrics) {
-            if (fm != null) {
-                // 使用 bottom 作为 lineSpace
-                val lineSpace = fm.bottom
-                fm.top = -(fontMetrics + spanProps.height) / 2
-                fm.ascent = fm.top
-                fm.bottom = spanProps.height + fm.top + lineSpace
-                fm.descent = fm.bottom
-            }
+        if (fm != null) {
+            val diff = spanProps.height - (fm.bottom - fm.top)
+            fm.bottom = maxOf(0, fm.bottom + diff / 2)
+            fm.top = fm.bottom - spanProps.height
+            fm.ascent = fm.top
+            fm.descent = fm.bottom
         }
         return spanProps.width
     }

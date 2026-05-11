@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,9 +17,15 @@ package com.tencent.kuikly.core.collection
 
 expect inline fun <E> fastArrayListOf(): MutableList<E>
 
+expect inline fun <E> fastMutableListOf(): MutableList<E>
+
+expect inline fun <K, V> fastMutableMapOf(): MutableMap<K, V>
+
 expect inline fun <K, V> fastHashMapOf(): MutableMap<K, V>
 
 expect inline fun <E> fastHashSetOf(): MutableSet<E>
+
+expect inline fun <E> fastMutableSetOf(): MutableSet<E>
 
 expect inline fun <K, V> fastLinkedMapOf(): MutableMap<K, V>
 
@@ -34,4 +40,3 @@ expect inline fun <E> Collection<E>.toFastList(): List<E>
 expect inline fun <E> Collection<E>.toFastMutableList(): MutableList<E>
 
 expect inline fun <K, V> MutableMap<K, V>.toFastMap(): Map<K, V>
-

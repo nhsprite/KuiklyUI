@@ -1,7 +1,8 @@
 package com.tencent.kuikly.core.layout
 
-import com.tencent.kuikly.core.collection.fastArrayListOf
-import com.tencent.kuikly.core.collection.fastHashSetOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
+import com.tencent.kuikly.core.collection.fastMutableSetOf
+import com.tencent.kuikly.core.utils.checkThread
 
 class FlexNode {
 
@@ -155,7 +156,6 @@ class FlexNode {
                 markDirty()
             }
         }
-
 
     var styleMaxWidth: Float
         get() = flexStyle.maxWidth
@@ -331,6 +331,14 @@ class FlexNode {
             return children?.size ?: 0
         }
 
+    internal fun nodeCount() : Int{
+        var count = children?.size ?: 0
+        children?.forEach {
+            count += it.nodeCount()
+        }
+        return count
+    }
+
     fun getChildAt(index: Int): FlexNode? {
         return children?.getOrNull(index)
     }
@@ -341,7 +349,7 @@ class FlexNode {
         }
 
         if (children == null) {
-            children = fastArrayListOf()
+            children = fastMutableListOf()
         }
         if (index >= children!!.count()) {
             children?.add(child)
@@ -358,7 +366,7 @@ class FlexNode {
 
     fun onlyAddChild(child: FlexNode) {
         if (children == null) {
-            children = fastArrayListOf()
+            children = fastMutableListOf()
         }
         children?.add(child)
     }
@@ -382,7 +390,7 @@ class FlexNode {
 
     fun calculateLayout(layoutContext: FlexLayoutContext?) {
         flexLayout.resetResult()
-        val dirtyList = fastHashSetOf<FlexNode>()
+        val dirtyList = fastMutableSetOf<FlexNode>()
         val maxWidth = if (!styleMaxWidth.isUndefined()) {
             styleMaxWidth
         } else {
@@ -420,6 +428,7 @@ class FlexNode {
     }
 
     fun markDirty() {
+        checkThread("Layout", "modify")
         if (isDirty) {
             return
         }
@@ -537,7 +546,6 @@ data class Frame(val x: Float = 0f,
     fun isDefaultValue(): Boolean {
         return this === zero
     }
-
 
     fun minY(): Float {
         return y

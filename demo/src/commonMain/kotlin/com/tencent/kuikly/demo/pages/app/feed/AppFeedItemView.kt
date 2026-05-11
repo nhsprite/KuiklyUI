@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,11 +21,32 @@ import com.tencent.kuikly.core.base.ComposeEvent
 import com.tencent.kuikly.core.base.ComposeView
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.module.CallbackRef
+import com.tencent.kuikly.core.module.NotifyModule
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.app.common.AppNineGrid
 import com.tencent.kuikly.demo.pages.app.model.AppFeedModel
+import com.tencent.kuikly.demo.pages.app.theme.ThemeManager
 
 internal class AppFeedItemView : ComposeView<AppFeedItemViewAttr, AppFeedItemViewEvent>() {
+
+    private var theme by observable(ThemeManager.getTheme())
+    private lateinit var eventCallbackRef: CallbackRef
+
+    override fun created() {
+        super.created()
+        eventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(ThemeManager.SKIN_CHANGED_EVENT) { _ ->
+                theme = ThemeManager.getTheme()
+            }
+    }
+
+    override fun viewDestroyed() {
+        super.viewDestroyed()
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, eventCallbackRef)
+    }
 
     override fun createAttr(): AppFeedItemViewAttr {
         return AppFeedItemViewAttr()
@@ -39,14 +60,14 @@ internal class AppFeedItemView : ComposeView<AppFeedItemViewAttr, AppFeedItemVie
         val ctx = this
         return {
             attr {
-                backgroundColor(Color.WHITE)
+                backgroundColor(ctx.theme.colors.feedBackground)
             }
             // 作者
             AppFeedItemAuthor {
                 attr {
                     userInfo = ctx.attr.item.userInfo
                     tail = ctx.attr.item.tail
-                    createtime = ctx.attr.item.createtime.toLong()
+                    createTime = ctx.attr.item.createTime
                 }
             }
             // 文字内容区域
@@ -56,26 +77,26 @@ internal class AppFeedItemView : ComposeView<AppFeedItemViewAttr, AppFeedItemVie
                 }
             }
             // 视频区域
-            AppFeedVedio {
+            AppFeedVideo {
                 attr {
-                    vedioUrl = ctx.attr.item.vediourl
+                    videoUrl = ctx.attr.item.videoUrl
                 }
             }
             // 九宫图
             AppNineGrid {
                 attr {
-                    picUrls = ctx.attr.item.picurl
+                    picUrls = ctx.attr.item.picUrl
                 }
             }
             // 转发内容
-            AppRetWeet {
+            AppForward {
                 attr {
-                    containZf = ctx.attr.item.containZf
-                    zfContent = ctx.attr.item.zfContent
-                    zfNick = ctx.attr.item.zfNick
-                    zfPicUrl = ctx.attr.item.zfPicurl
-                    zfUserId = ctx.attr.item.zfUserId
-                    zfVideoUrl = ctx.attr.item.zfVedioUrl
+                    containForward = ctx.attr.item.containForward
+                    forwardContent = ctx.attr.item.forwardContent
+                    forwardNick = ctx.attr.item.forwardNick
+                    forwardPicUrl = ctx.attr.item.forwardPicUrl
+                    forwardUserId = ctx.attr.item.forwardUserId
+                    forwardVideoUrl = ctx.attr.item.forwardVideoUrl
                 }
             }
             // 下划线
@@ -83,16 +104,16 @@ internal class AppFeedItemView : ComposeView<AppFeedItemViewAttr, AppFeedItemVie
                 attr {
                     margin(left = 15.0f, right = 15.0f, bottom = 10.0f, top = 0.0f)
                     height(0.5f)
-                    backgroundColor(Color(0xffDBDBDB))
+                    backgroundColor(ctx.theme.colors.feedContentDivider)
                 }
             }
             // 转发收藏点赞
             AppFeedBottom {
                 attr {
-                    retweetNum = ctx.attr.item.zhuanfaNum
+                    retweetNum = ctx.attr.item.forwardNum
                     commentNum = ctx.attr.item.commentNum
                     likeNum = ctx.attr.item.likeNum
-                    likeStatus = ctx.attr.item.zanStatus
+                    likeStatus = ctx.attr.item.likeStatus
                 }
             }
             // 间隔
@@ -100,7 +121,7 @@ internal class AppFeedItemView : ComposeView<AppFeedItemViewAttr, AppFeedItemVie
                 attr {
                     marginTop(10.0f)
                     height(12.0f)
-                    backgroundColor(Color(0xffEFEFEF))
+                    backgroundColor(ctx.theme.colors.background)
                 }
             }
         }

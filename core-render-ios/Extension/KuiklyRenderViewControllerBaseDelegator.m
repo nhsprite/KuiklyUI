@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,7 +14,6 @@
  */
 
 #import "KuiklyRenderViewControllerBaseDelegator.h"
-#import "KuiklyRenderViewControllerBaseDelegator+Extension.h"
 #import "KuiklyRenderView.h"
 #import "KRSnapshotModule.h"
 #import "KRHttpRequestTool.h"
@@ -28,6 +27,7 @@
 #import "KuiklyRenderCore.h"
 #import "KuiklyRenderFrameworkContextHandler.h"
 #import "KuiklyCoreDefine.h"
+#import "KRBackPressModule.h"
 #define KRWeakSelf __weak typeof(self) weakSelf = self;
 
 #define VIEW_DID_APPEAR @"viewDidAppear"
@@ -37,6 +37,8 @@
 NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 @interface KuiklyRenderViewControllerBaseDelegator()<KuiklyRenderViewDelegate>
 
+@property (nonatomic, strong) NSString *pageName;
+@property (nullable, nonatomic, weak) UIView * view;
 @property (nonatomic, strong) NSDictionary *pageData;
 @property (nullable, nonatomic, strong) UIView * loadingView;
 @property (nullable, nonatomic, strong) UIView * errorView;
@@ -55,6 +57,7 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 
 @implementation KuiklyRenderViewControllerBaseDelegator {
     KRPerformanceManager *_performanceManager;
+    BOOL _onGetPerformanceDataInvoked;
 }
 
 - (instancetype)initWithPageName:(NSString *)pageName pageData:(NSDictionary *)pageData {
@@ -66,6 +69,7 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
                    frameworkName:(NSString *)frameworkName {
     if (self = [super init]) {
         self.pageName = pageName;
+        _onGetPerformanceDataInvoked = NO;
         _pageData = pageData;
         _frameworkName = frameworkName;
         _performanceManager = [[KRPerformanceManager alloc] initWithPageName:pageName];
@@ -119,6 +123,7 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 
 - (void)viewWillDisappear {
     [self p_disptachDelegatorLifeCycleWithSel:@selector(viewWillDisappear) object:nil];
+    [self onGetPerformanceData];
 }
 
 - (void)viewDidDisappear {
@@ -186,14 +191,22 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 
 - (void)initRenderViewWithContextCode:(NSString *)contextCode {
     [self p_disptachDelegatorLifeCycleWithSel:@selector(willInitRenderView) object:nil];
-    KuiklyContextParam *contextParam = [KuiklyContextParam newWithPageName:self.pageName];
+    NSURL *resourceFolderUrl = nil;
+    if ([self.delegate respondsToSelector:@selector(resourceFolderUrlForKuikly:)]) {
+        resourceFolderUrl = [self.delegate resourceFolderUrlForKuikly:_pageName];
+    }
+    KuiklyContextParam *contextParam = [KuiklyContextParam newWithPageName:self.pageName
+                                                         resourceFolderUrl:resourceFolderUrl];
     contextParam.contextMode = self.contextMode;
+    _performanceManager.modeId = self.contextMode.modeId;
 
+    [self p_disptachDelegatorLifeCycleWithSel:@selector(willInitRenderCore) object:nil];
     _renderView = [[KuiklyRenderView alloc] initWithSize:self.view.bounds.size
                                              contextCode:contextCode
                                             contextParam:contextParam
                                                   params:[self contextPageData]
                                                 delegate:self];
+    [self p_disptachDelegatorLifeCycleWithSel:@selector(didInitRenderCore) object:nil];
     [self setExceptionBlock:_renderView];
     // 接收当前rootview传过来的通知
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -245,10 +258,10 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
     [self p_disptachDelegatorLifeCycleWithSel:@selector(willFetchContextCode) object:nil];
     [self fetchContextCodeWithResultCallback:^(NSString * _Nullable contextCode, NSError * _Nullable error) {
         if (!weakSelf) {
-            return ;
+            return;
         }
         [weakSelf p_performOnMainThreadWithBlock:^{
-            weakSelf.contextMode = [self createContextMode:contextCode];
+            weakSelf.contextMode = [weakSelf createContextMode:contextCode];
             [weakSelf p_disptachDelegatorLifeCycleWithSel:@selector(didFetchContextCode) object:nil];
             weakSelf.fetchContextCoding = NO;
             [weakSelf p_hideAllStatusView];
@@ -294,6 +307,27 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 }
 
 
+- (void)onBackPressedWithCompletion:(KuiklyBackPressCompletion)completion {
+    // 1. 获取 Module 并设置 completion
+    KRBackPressModule *module = (KRBackPressModule *)[_renderView moduleWithName:@"KRBackPressModule"];
+    // 2. Module 不存在时立即回调（同步容错）
+    if (!module) {
+        // Module 不存在时立即回调
+        if (completion) {
+            completion(NO);
+        }
+        return;
+    }
+
+    // 3. 设置 completion 到 Module
+    [module setBackPressCompletion:completion];
+
+    // 4. 发送事件到 Kotlin 侧 (异步)
+    [_renderView sendWithEvent:@"onBackPressed" data:@{}];
+    
+    
+}
+
 #pragma mark - notifications
 
 - (void)onReceiveApplicationDidBecomeActiveNotification:(NSNotification *)notification {
@@ -318,10 +352,10 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
     if ([self.delegate respondsToSelector:@selector(contentViewDidLoad)]) {
         [self.delegate contentViewDidLoad];
     }
-    [self onPageLoadComplete:YES error:nil];
     [self p_disptachDelegatorLifeCycleWithSel:@selector(contentViewDidLoad) object:nil];
     [self sendWithEvent:PAGE_FIRST_FRAME_PAINT data:@{}];
     [self p_hideSnapshotView];
+    [self onPageLoadComplete:YES error:nil];
 }
 
 - (void)scrollViewDidLayout:(UIScrollView *)scrollView renderView:(KuiklyRenderView *)renderView {
@@ -333,6 +367,23 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
 - (NSString *)turboDisplayKey {
     if ([self.delegate respondsToSelector:@selector(turboDisplayKey)]) {
         return [self.delegate turboDisplayKey];
+    }
+    return nil;
+}
+
+// 新增：返回 TurboDisplay 配置实例
+- (KRTurboDisplayConfig *)turboDisplayConfig {
+    if ([self.delegate respondsToSelector:@selector(configureTurboDisplay)]) {
+        KRTurboDisplayConfig *config = [self.delegate configureTurboDisplay];
+        return config ? [config copy] : nil;
+    }
+    return nil;
+}
+
+
+- (UIWindow *)viewControllerHostWindow {
+    if ([self.delegate respondsToSelector:@selector(viewControllerHostWindow)]) {
+        return [self.delegate viewControllerHostWindow];
     }
     return nil;
 }
@@ -364,6 +415,17 @@ NSString *const KRPageDataSnapshotKey = @"kr_snapshotKey";
     if ([self.delegate respondsToSelector:@selector(onPageLoadComplete:error:mode:)]) {
         [self.delegate onPageLoadComplete:isSucceed error:error mode:self.contextMode.modeId];
     }
+}
+
+- (void)onGetPerformanceData{
+    if (_onGetPerformanceDataInvoked){
+        // invoke only once
+        return;
+    }
+    if ([self.delegate respondsToSelector:@selector(onGetPerformanceData)]) {
+        [self.delegate onGetPerformanceData];
+    }
+    _onGetPerformanceDataInvoked = YES;
 }
 
 #pragma mark - private

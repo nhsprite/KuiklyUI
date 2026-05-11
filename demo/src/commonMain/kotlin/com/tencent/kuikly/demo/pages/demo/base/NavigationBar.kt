@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,14 +15,19 @@
 
 package com.tencent.kuikly.demo.pages.demo.base
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ComposeAttr
+import com.tencent.kuikly.core.base.ComposeEvent
+import com.tencent.kuikly.core.base.ComposeView
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.module.RouterModule
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Image
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
-import com.tencent.kuikly.demo.pages.base.Utils
-import com.tencent.kuikly.core.reactive.handler.*
+
 internal class NavigationBar: ComposeView<NavigationBarAttr, ComposeEvent>() {
     override fun createEvent(): ComposeEvent {
         return ComposeEvent()
@@ -47,15 +52,12 @@ internal class NavigationBar: ComposeView<NavigationBarAttr, ComposeEvent>() {
                         allCenter()
                     }
 
-
-
-
                     Text {
                         attr {
                             text(ctx.attr.title)
                             color(Color.BLACK)
                             fontSize(17f)
-                            fontWeightSemisolid()
+                            fontWeightSemiBold()
                         }
                     }
 
@@ -80,7 +82,6 @@ internal class NavigationBar: ComposeView<NavigationBarAttr, ComposeEvent>() {
         }
     }
 }
-
 
 internal class NavigationBarAttr : ComposeAttr() {
     var title : String by observable("")

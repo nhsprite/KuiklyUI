@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,9 +16,8 @@
 #ifndef KuiklyRenderViewExportProtocol_h
 #define KuiklyRenderViewExportProtocol_h
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderModuleExportProtocol.h"
-#import "KRComponentDefine.h"
 
 @protocol KuiklyRenderShadowProtocol;
 @protocol KuiklyRenderViewLifyCycleProtocol;
@@ -103,9 +102,9 @@
 @optional
 /*
  * @brief 生成要在主线程执行的任务当将要设置shadow给RenderView时
- * 注：该方法在contenxt线程被调用
+ * 注：该方法在context线程被调用
  */
-- (dispatch_block_t)hrv_taskToMainQueueWhenWillSetShadowToView;
+- (dispatch_block_t _Nullable)hrv_taskToMainQueueWhenWillSetShadowToView;
 
 @end
 
@@ -121,7 +120,7 @@
 
 @end
 
-
+#import "KRComponentDefine.h"
 
 #endif /* KuiklyRenderViewExportProtocol_h */
 

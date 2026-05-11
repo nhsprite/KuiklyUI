@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,16 +15,30 @@
 
 package com.tencent.kuikly.core.views
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Attr
+import com.tencent.kuikly.core.base.BoxShadow
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ColorStop
+import com.tencent.kuikly.core.base.DeclarativeBaseView
+import com.tencent.kuikly.core.base.Direction
+import com.tencent.kuikly.core.base.Size
+import com.tencent.kuikly.core.base.ViewConst
+import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.base.event.EventHandlerFn
-import com.tencent.kuikly.core.layout.*
-import com.tencent.kuikly.core.pager.Pager
+import com.tencent.kuikly.core.base.toInt
+import com.tencent.kuikly.core.layout.FlexDirection
+import com.tencent.kuikly.core.layout.FlexNode
+import com.tencent.kuikly.core.layout.FlexPositionType
+import com.tencent.kuikly.core.layout.MeasureFunction
+import com.tencent.kuikly.core.layout.MeasureOutput
+import com.tencent.kuikly.core.layout.isUndefined
+import com.tencent.kuikly.core.module.FontModule
 import com.tencent.kuikly.core.views.shadow.TextShadow
 
 open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunction {
 
-    private var shadow: TextShadow? = null
+    var shadow: TextShadow? = null
     private var didLayout = false
 
     override fun willInit() {
@@ -88,6 +102,12 @@ open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunctio
         }
     }
 
+    fun updateShadow() {
+        if (shadow?.calculateFromCache != true) {
+            renderView?.setShadow()
+        }
+    }
+
     override fun measure(
         node: FlexNode,
         width: Float,
@@ -113,9 +133,8 @@ open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunctio
             size = heightLayoutSize(size, width, flexNode.styleMinHeight)
         }
         didLayout = true
-        if (shadow?.calculateFromCache != true) {
-            renderView?.setShadow()
-        }
+
+        updateShadow()
         measureOutput.width = size?.width ?: 0f
         measureOutput.height = size?.height ?: 0f
         tryFireLineBreakMarginEvent()
@@ -124,9 +143,10 @@ open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunctio
     private fun tryFireLineBreakMarginEvent() {
         if (attr.getProp(TextConst.LINE_BREAK_MARGIN) != null) {
             getPager().addTaskWhenPagerDidCalculateLayout {
-                val isLineBreakMargin = shadow?.callMethod(TextConst.SHADOW_METHOD_IS_LINE_BREAK_MARGIN, "") == "1"
+                val isLineBreakMargin =
+                    shadow?.callMethod(TextConst.SHADOW_METHOD_IS_LINE_BREAK_MARGIN, "") == "1"
                 if (isLineBreakMargin) {
-                    event.handler?.invoke(null)
+                    onFireEvent(TextEvent.TextEventConst.ON_LINE_BREAK_MARGIN, null)
                 }
             }
         }
@@ -188,7 +208,6 @@ open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunctio
         return Size(measureOutputSize.width, outputHeight)
     }
 
-
     private fun flexLayoutSize(measureOutputSize: Size, fitWidth: Float, fitHeight: Float): Size {
         val flexDirection = flexNode.parent?.flexDirection
         if (flexDirection == FlexDirection.ROW || flexDirection == FlexDirection.ROW_REVERSE) {
@@ -211,9 +230,9 @@ open class TextView : DeclarativeBaseView<TextAttr, TextEvent>(), MeasureFunctio
 
 }
 
-
 open class TextAttr : Attr() {
-    internal var didSetTextGradient = false
+    var didSetTextGradient = false
+    internal var letterSpacing: Float? = null
     open fun value(value: String): TextAttr {
         TextConst.VALUE with value
         return this
@@ -234,15 +253,23 @@ open class TextAttr : Attr() {
         return this
     }
 
-    fun fontSize(size: Float): TextAttr {
-        TextConst.FONT_SIZE with size
+    /**
+     * 设置字体大小
+     * @param size 字体大小
+     * @param scaleFontSizeEnable 是否允许端侧随宿主字体模式缩放，默认根据Pager.scaleFontSizeEnable() 返回值决定（业务可通过Pager重写该方式统一页面生效）
+     */
+    open fun fontSize(size: Float, scaleFontSizeEnable: Boolean? = null): TextAttr {
+        TextConst.FONT_SIZE with (FontModule.scaleFontSize(size, scaleFontSizeEnable))
+        letterSpacing?.also {
+            letterSpacing(it)
+        }
         return this
     }
 
     /**
      * 仅iOS、鸿蒙支持ExtraLight字重
      */
-    fun fontWeightExtraLight(): TextAttr {
+    open fun fontWeightExtraLight(): TextAttr {
         TextConst.FONT_WEIGHT with "200"
         return this
     }
@@ -270,9 +297,18 @@ open class TextAttr : Attr() {
         return this
     }
 
-
     open fun fontWeightSemiBold(): TextAttr {
-        TextConst.FONT_WEIGHT with FontWeight.SEMISOLID.value
+        TextConst.FONT_WEIGHT with FontWeight.SEMIBOLD.value
+        return this
+    }
+
+    open fun fontWeightExtraBold(): TextAttr {
+        TextConst.FONT_WEIGHT with FontWeight.EXTRABOLD.value
+        return this
+    }
+
+    open fun fontWeightBlack(): TextAttr {
+        TextConst.FONT_WEIGHT with FontWeight.BLACK.value
         return this
     }
 
@@ -290,11 +326,19 @@ open class TextAttr : Attr() {
     }
 
     open fun fontWeight600(): TextAttr {
-        return fontWeightSemisolid()
+        return fontWeightSemiBold()
     }
 
     open fun fontWeight700(): TextAttr {
         return fontWeightBold()
+    }
+
+    open fun fontWeight800(): TextAttr {
+        return fontWeightExtraBold()
+    }
+
+    open fun fontWeight900(): TextAttr {
+        return fontWeightBlack()
     }
 
     open fun fontFamily(fontFamily: String): TextAttr {
@@ -371,6 +415,20 @@ open class TextAttr : Attr() {
         return this
     }
 
+    open fun letterSpacing(value: Float): TextAttr {
+        var spacing = value
+        if (pagerData.isAndroid && pagerData.nativeBuild < 4) { // 安卓版本最低支持判断
+            val fontSize = getProp(TextConst.FONT_SIZE) as? Float
+            val dp2PxScale = 3f // 低版本未能直接拿到屏幕PPI比例，这里使用平均值兼容
+            if (fontSize != null && fontSize > 0f) {
+                spacing = (value / fontSize) / dp2PxScale
+            }
+        }
+        letterSpacing = value
+        TextConst.LETTER_SPACING with spacing
+        return this
+    }
+
     open fun paragraphSpacing(value: Float): TextAttr {
         TextConst.PARAGRAPH_SPACING with value
         return this
@@ -390,8 +448,9 @@ open class TextAttr : Attr() {
      * 首行缩进距离
      * @param headIndent 缩进距离
      */
-    open fun firstLineHeadIndent(headIndent: Float) {
+    open fun firstLineHeadIndent(headIndent: Float): TextAttr {
         TextConst.HEAD_INDENT with headIndent
+        return this
     }
 
     /**
@@ -425,6 +484,9 @@ open class TextAttr : Attr() {
 
     /**
      * 设置文字描边颜色和宽度
+     *
+     * **注意：Android暂不支持**
+     *
      * @param color 文字描边颜色
      * @param color 文字描边宽度
      */
@@ -451,14 +513,18 @@ open class TextAttr : Attr() {
 
 open class TextEvent : Event() {
 
-    internal var handler: EventHandlerFn? = null
-
     /**
      * 监听是否触发了LineBreakMargin
      * @param handler 事件处理器
      */
     open fun onLineBreakMargin(handler: EventHandlerFn) {
-        this.handler = handler
+        this.register(TextEventConst.ON_LINE_BREAK_MARGIN) {
+            handler.invoke(it)
+        }
+    }
+
+    object TextEventConst {
+        const val ON_LINE_BREAK_MARGIN = "onLineBreakMargin"
     }
 }
 
@@ -476,6 +542,7 @@ object TextConst {
     const val TINT_COLOR = "tintColor"
     const val LINES = "numberOfLines"
     const val LINE_SPACING = "lineSpacing"
+    const val LETTER_SPACING = "letterSpacing"
     const val LINE_HEIGHT = "lineHeight"
     const val PARAGRAPH_SPACING = "paragraphSpacing"
     const val TEXT_ALIGN = "textAlign"
@@ -488,6 +555,9 @@ object TextConst {
     const val TEXT_USE_DP_FONT_SIZE_DIM = "useDpFontSizeDim"
 
     const val SHADOW_METHOD_IS_LINE_BREAK_MARGIN = "isLineBreakMargin"
+    const val PLACEHOLDER = "placeholder"
+    const val PLACEHOLDER_COLOR = "placeholderColor"
+    const val AUTO_HIDE_KEYBOARD_ON_IME_ACTION = "autoHideKeyboardOnImeAction"
 }
 
 enum class TextAlign(val value: String) {
@@ -504,10 +574,13 @@ enum class FontStyle(val value: String) {
 enum class FontWeight(val value: String) {
     NORMAL("400"),
     MEDIUM("500"),
+    @Deprecated("use SEMIBOLD instead", replaceWith = ReplaceWith("SEMIBOLD"))
     SEMISOLID("600"),
-    BOLD("700")
+    SEMIBOLD("600"),
+    BOLD("700"),
+    EXTRABOLD("800"),
+    BLACK("900")
 }
-
 
 fun ViewContainer<*, *>.Text(init: TextView.() -> Unit) {
     val textView = createViewFromRegister(ViewConst.TYPE_TEXT_CLASS_NAME) as? TextView

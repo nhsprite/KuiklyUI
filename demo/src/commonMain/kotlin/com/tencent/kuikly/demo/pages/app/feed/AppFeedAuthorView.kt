@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,13 +27,34 @@ import com.tencent.kuikly.core.base.attr.ImageUri
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.layout.FlexDirection
 import com.tencent.kuikly.core.module.CalendarModule
+import com.tencent.kuikly.core.module.CallbackRef
+import com.tencent.kuikly.core.module.NotifyModule
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Image
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.app.model.AppUserInfo
+import com.tencent.kuikly.demo.pages.app.theme.ThemeManager
 
 internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, AppFeedItemAuthorViewEvent>() {
-    
+
+    private var theme by observable(ThemeManager.getTheme())
+    private lateinit var eventCallbackRef: CallbackRef
+
+    override fun created() {
+        super.created()
+        eventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(ThemeManager.SKIN_CHANGED_EVENT) { _ ->
+                theme = ThemeManager.getTheme()
+            }
+    }
+
+    override fun viewDestroyed() {
+        super.viewDestroyed()
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, eventCallbackRef)
+    }
+
     override fun createEvent(): AppFeedItemAuthorViewEvent {
         return AppFeedItemAuthorViewEvent()
     }
@@ -60,20 +81,20 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                         resizeContain()
                         size(width = 40f, height = 40f)
                         borderRadius(20f)
-                        src(ctx.attr.userInfo.headurl)
+                        src(ctx.attr.userInfo.headUrl)
                     }
                 }
                 // 实名认证
-                vif({ctx.attr.userInfo.isvertify != 0}) {
+                vif({ctx.attr.userInfo.isVerify != 0}) {
                     Image {
                         attr {
                             alignSelfCenter()
                             resizeContain()
                             size(width = 15f, height = 15f)
-                            if (ctx.attr.userInfo.isvertify == 1) {
-                                src(ImageUri.pageAssets("home_vertify.webp"))
+                            if (ctx.attr.userInfo.isVerify == 1) {
+                                src(ImageUri.pageAssets("home_verify.webp"))
                             } else {
-                                src(ImageUri.pageAssets("home_vertify2.webp"))
+                                src(ImageUri.pageAssets("home_verify2.webp"))
                             }
                             absolutePosition(right = 0f, bottom = 0f)
                         }
@@ -96,20 +117,20 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                             marginLeft(6f)
                             text(ctx.attr.userInfo.nick)
                             fontSize(15f)
-                            if (ctx.attr.userInfo.ismember == 0) {
-                                color(Color.BLACK)
+                            if (ctx.attr.userInfo.isMember == 0) {
+                                color(ctx.theme.colors.feedUserNameNormal)
                             } else {
-                                color(Color(0xffF86119))
+                                color(ctx.theme.colors.feedUserNameMember)
                             }
                         }
                     }
-                    vif({ctx.attr.userInfo.ismember != 0}) {
+                    vif({ctx.attr.userInfo.isMember != 0}) {
                         Image {
                             attr {
                                 marginLeft(3f)
                                 marginTop(3f)
                                 size(15f, 13f)
-                                src(ImageUri.pageAssets("home_memeber.webp"))
+                                src(ImageUri.pageAssets("home_member.webp"))
                             }
                         }
                     }
@@ -122,8 +143,8 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                     vif({ctx.attr.tail.isEmpty()}) {
                         Text {
                             attr {
-                                text(ctx.attr.userInfo.decs)
-                                color(Color(0xff808080))
+                                text(ctx.attr.userInfo.desc)
+                                color(ctx.theme.colors.feedUserSignature)
                                 fontSize(11.0f)
                             }
                         }
@@ -135,13 +156,10 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                             }
                             Text {
                                 val datetime =
-                                    acquireModule<CalendarModule>(CalendarModule.MODULE_NAME).formatTime(
-                                        ctx.attr.createtime,
-                                        "yyyy-MM-dd HH:mm:ss"
-                                    )
+                                    ctx.attr.createTime
                                 attr {
                                     text(datetime)
-                                    color(Color(0xff808080))
+                                    color(ctx.theme.colors.feedUserSignature)
                                     fontSize(11.0f)
                                 }
                             }
@@ -149,14 +167,14 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                                 attr {
                                     margin(left = 7.0f, right = 7.0f)
                                     text("来自")
-                                    color(Color(0xff808080))
+                                    color(ctx.theme.colors.feedUserSignature)
                                     fontSize(11.0f)
                                 }
                             }
                             Text {
                                 attr {
                                     text(ctx.attr.tail)
-                                    color(Color(0xff5B778D))
+                                    color(ctx.theme.colors.feedUserDevice)
                                     fontSize(11.0f)
                                 }
                             }
@@ -169,15 +187,14 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
                 attr {
                     justifyContentFlexEnd()
                     alignItemsCenter()
-                    backgroundColor(Color.WHITE)
                     padding(top = 4.0f, bottom = 4.0f, left = 8.0f, right = 8.0f)
                     borderRadius(12.0f)
-                    border(Border(lineWidth = 0.5f, lineStyle = BorderStyle.SOLID, color = Color(0xFFFB8C00)))
+                    border(Border(lineWidth = 0.5f, lineStyle = BorderStyle.SOLID, color = ctx.theme.colors.feedUserFollowButton))
                 }
                 Text {
                     attr {
                         text("+ 关注")
-                        color(Color(0xFFFB8C00))
+                        color(ctx.theme.colors.feedUserFollowButton)
                         fontSize(12.0f)
                     }
                 }
@@ -187,11 +204,10 @@ internal class AppFeedItemAuthorView: ComposeView<AppFeedItemAuthorViewAttr, App
     }
 }
 
-
 internal class AppFeedItemAuthorViewAttr : ComposeAttr() {
     lateinit var userInfo: AppUserInfo
     lateinit var tail: String
-    var createtime: Long = 0L
+    var createTime: String = ""
 }
 
 internal class AppFeedItemAuthorViewEvent : ComposeEvent() {

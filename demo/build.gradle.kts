@@ -4,68 +4,116 @@ import org.jetbrains.kotlin.konan.target.Family
 plugins {
     kotlin("multiplatform")
     kotlin("native.cocoapods")
+    kotlin("plugin.compose")
     id("com.android.library")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.compose")
+    id("com.tencent.kuikly-open.kuikly")
 }
-
 
 group = Publishing.kuiklyGroup
 version = "1.0.0"
 
 repositories {
+    google()
+    mavenCentral()
     mavenLocal()
 }
 
 kotlin {
 
     // target
-    android() {
+    androidTarget() {
         publishLibraryVariantsGroupedByFlavor = true
         publishLibraryVariants("release")
     }
 
-    jvm()
+    js(IR) {
+        moduleName = Output.name
+        browser {
+            webpackTask {
+                outputFileName = "${moduleName}.js" // 最后输出的名字
+            }
 
-    ios()
+            commonWebpackConfig {
+                output?.library = null // 不导出全局对象，只导出必要的入口函数
+                devtool = "source-map" // 不使用默认的 eval 执行方式构建出 source-map，而是构建单独的 sourceMap 文件
+            }
+        }
+        binaries.executable() //将kotlin.js与kotlin代码打包成一份可直接运行的js文件
+    }
+
     iosX64()
+    iosArm64()
     iosSimulatorArm64()
+    macosX64()
+    macosArm64()
+
+    sourceSets {
+        all {
+            languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+        }
+    }
 
     // sourceSet
     val commonMain by sourceSets.getting {
         dependencies {
             implementation(project(":core"))
-            compileOnly(project(":core-annotations"))
+            implementation(project(":compose"))
+            implementation(project(":core-annotations"))
+//            compileOnly(project(":core-annotations"))
+            // :core-wx is OPTIONAL. Depend on it here only because the demo
+            // showcases WeChat MiniProgram components / APIs. Apps that do not
+            // need WX capabilities simply omit this dependency and pay zero
+            // cost (no classes leaked into android/iOS artifacts).
+            // Declared in commonMain so cross-platform pages can conditionally
+            // use `WXButton {}` / `registerWXModules()` behind an
+            // `is_miniprogram` runtime check.
+            implementation(project(":core-wx"))
+            // Chat Demo 相关依赖
+            implementation("com.tencent.kuiklybase:markdown:0.4.0")
+            implementation("io.ktor:ktor-client-core:2.3.10")
         }
+    }
+
+    val jsMain by sourceSets.getting {
+        dependsOn(commonMain)
+//        kotlin.srcDir(
+//            "build/generated/ksp/js/jsMain/kotlin"
+//        )
     }
 
     val androidMain by sourceSets.getting {
         dependsOn(commonMain)
+        dependencies {
+            implementation("io.ktor:ktor-client-okhttp:2.3.10")
+        }
 //        kotlin.srcDirs(
 //            "build/generated/ksp/android/androidDebug/kotlin",
 //            "build/generated/ksp/android/androidRelease/kotlin",
 //        )
     }
 
-    val iosMain by sourceSets.getting {
+    sourceSets.iosMain {
         dependsOn(commonMain)
+        dependencies {
+            implementation("io.ktor:ktor-client-darwin:2.3.10")
+        }
     }
 
-    val jvmMain by sourceSets.getting {
+    sourceSets.appleMain {
         dependsOn(commonMain)
+        dependencies {
+            implementation("io.ktor:ktor-client-darwin:2.3.10")
+        }
     }
 
     targets.withType<KotlinNativeTarget> {
         val mainSourceSets = this.compilations.getByName("main").defaultSourceSet
         when {
+
             konanTarget.family.isAppleFamily -> {
-                binaries {
-//                    framework {
-//                        isStatic = true
-//                        embedBitcode("bitcode")
-//                        freeCompilerArgs = freeCompilerArgs + getCommonCompilerArgs()
-//                    }
-                }
-                mainSourceSets.dependsOn(iosMain)
+                mainSourceSets.dependsOn(sourceSets.getByName("appleMain"))
             }
 
             konanTarget.family == Family.ANDROID -> {
@@ -88,8 +136,10 @@ kotlin {
         homepage = "Link to the Shared Module homepage"
         version = "1.0"
         ios.deploymentTarget = "14.1"
+        osx.deploymentTarget = "10.13"
 //        podfile = project.file("../iosApp/Podfile")
         framework {
+            isStatic = true
             baseName = "shared"
         }
         license = "MIT"
@@ -99,6 +149,7 @@ kotlin {
 
 ksp {
     arg("pageName", getPageName())
+    arg(Output.KEY_PACK_LOCAL_JS_BUNDLE, packLocalJsBundle())
 }
 
 dependencies {
@@ -106,13 +157,17 @@ dependencies {
         add("kspIosArm64", this)
         add("kspIosX64", this)
         add("kspIosSimulatorArm64", this)
+        add("kspMacosArm64", this)
+        add("kspMacosX64", this)
         add("kspAndroid", this)
+        add("kspJs", this)
     }
 }
 
 android {
-    compileSdk = 30
+    compileSdk = 34
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    namespace = "com.tencent.kuikly.demo"
     defaultConfig {
         minSdk = 21
         targetSdk = 30
@@ -139,6 +194,10 @@ fun getPageName(): String {
     return project.properties["pageName"] as? String ?: ""
 }
 
+fun packLocalJsBundle(): String {
+    return (project.properties[Output.KEY_PACK_LOCAL_JS_BUNDLE] as? String) ?: ""
+}
+
 fun getCommonCompilerArgs(): List<String> {
     return listOf(
         "-Xallocator=std"
@@ -149,4 +208,21 @@ fun getLinkerArgs(): List<String> {
     return listOf(
         "-Wl,--gc-sections,-s"
     )
+}
+
+// Compose 编译器稳定性报告（按需开启，用于验证类的稳定性推断，会增加编译耗时）
+// composeCompiler {
+//     reportsDestination.set(layout.buildDirectory.dir("compose_compiler"))
+//     metricsDestination.set(layout.buildDirectory.dir("compose_compiler"))
+// }
+
+// Kuikly 插件配置
+kuikly {
+    // JS 产物配置
+    js {
+        // 构建产物名，与 KMM 插件 webpackTask#outputFileName 一致
+        outputName("nativevue2")
+        // 可选：分包构建时的页面列表，如果为空则构建全部页面
+        // addSplitPage("route","home")
+    }
 }

@@ -2,6 +2,7 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id("maven-publish")
+    id("signing")
 }
 
 group = MavenConfig.GROUP
@@ -37,6 +38,8 @@ afterEvaluate {
 //                dependsOn("bundleReleaseAar")
 //
 //            }
+//            pom.configureMavenCentralMetadata()
+//            signPublicationIfKeyPresent(project)
         }
     }
 
@@ -77,5 +80,9 @@ android {
                 project.rootDir.absolutePath + "/core-annotations/src/commonMain/kotlin",
         )
         main.manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions.freeCompilerArgs += ["-module-name", "${project.group}.${project.name}"]
     }
 }

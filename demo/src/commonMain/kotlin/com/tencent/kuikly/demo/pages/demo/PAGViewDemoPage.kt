@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,12 +20,12 @@ import com.tencent.kuikly.core.base.Color
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewRef
 import com.tencent.kuikly.core.log.KLog
-import com.tencent.kuikly.core.timer.setTimeout
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.PAG
+import com.tencent.kuikly.core.views.PAGView
+import com.tencent.kuikly.core.views.PAGScaleMode
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.core.reactive.handler.*
-import com.tencent.kuikly.core.views.PAGView
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 
 @Page("PAGViewDemoPage")
@@ -45,6 +45,89 @@ internal class PAGViewDemoPage: BasePager() {
                     }
 
                 }
+
+                PAG {
+                    ref {
+                        ctx.pagViewRef = it
+                    }
+                    attr {
+                        backgroundColor(Color.GRAY)
+                        marginTop(100f)
+                        size(250f, 50f)
+                        repeatCount(3)
+                        autoPlay(ctx.autoPlay)
+                        scaleMode(PAGScaleMode.NONE)
+                        src("https://vfiles.gtimg.cn/wuji_dashboard/xy/componenthub/1pwxlc62.pag?test=15")
+                    }
+
+                    event {
+                        animationStart {
+                            KLog.d(TAG, "animationStart")
+                        }
+
+                        animationEnd {
+                            KLog.d(TAG, "animationEnd")
+                            ctx.pagViewRef.view?.setProgress(0.2f)
+                        }
+
+                    }
+                }
+
+                PAG {
+                    ref {
+                        ctx.pagViewRef = it
+                    }
+                    attr {
+                        backgroundColor(Color.GRAY)
+                        marginTop(100f)
+                        size(250f, 50f)
+                        repeatCount(3)
+                        autoPlay(ctx.autoPlay)
+                        scaleMode(PAGScaleMode.STRETCH)
+                        src("https://vfiles.gtimg.cn/wuji_dashboard/xy/componenthub/1pwxlc62.pag?test=15")
+                    }
+
+                    event {
+                        animationStart {
+                            KLog.d(TAG, "animationStart")
+                        }
+
+                        animationEnd {
+                            KLog.d(TAG, "animationEnd")
+                            ctx.pagViewRef.view?.setProgress(0.2f)
+                        }
+
+                    }
+                }
+
+
+                PAG {
+                    ref {
+                        ctx.pagViewRef = it
+                    }
+                    attr {
+                        backgroundColor(Color.GRAY)
+                        marginTop(100f)
+                        size(250f, 50f)
+                        repeatCount(3)
+                        autoPlay(ctx.autoPlay)
+                        scaleMode(PAGScaleMode.LETTER_BOX)
+                        src("https://vfiles.gtimg.cn/wuji_dashboard/xy/componenthub/1pwxlc62.pag?test=15")
+                    }
+
+                    event {
+                        animationStart {
+                            KLog.d(TAG, "animationStart")
+                        }
+
+                        animationEnd {
+                            KLog.d(TAG, "animationEnd")
+                            ctx.pagViewRef.view?.setProgress(0.2f)
+                        }
+
+                    }
+                }
+
                 PAG {
                     ref {
                         ctx.pagViewRef = it
@@ -62,9 +145,10 @@ internal class PAGViewDemoPage: BasePager() {
                     attr {
                         backgroundColor(Color.GRAY)
                         marginTop(100f)
-                        size(50f, 50f)
+                        size(250f, 50f)
                         repeatCount(3)
                         autoPlay(ctx.autoPlay)
+                        scaleMode(PAGScaleMode.ZOOM)
                         src("https://vfiles.gtimg.cn/wuji_dashboard/xy/componenthub/1pwxlc62.pag?test=15")
                     }
 
@@ -73,10 +157,9 @@ internal class PAGViewDemoPage: BasePager() {
                             KLog.d(TAG, "animationStart")
                         }
 
-
                         animationEnd {
                             KLog.d(TAG, "animationEnd")
-
+                            ctx.pagViewRef.view?.setProgress(0.2f)
                         }
 
                     }

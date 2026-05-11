@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package com.tencent.kuikly.demo.pages.demo.kit_demo.DeclarativeDemo
 
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewRef
 import com.tencent.kuikly.core.directives.vfor
@@ -107,7 +108,6 @@ internal class PageListExamplePage : BasePager() {
                     }
                 }
 
-
                 event {
                     pageIndexDidChanged {
                         ctx.currentIndex = (it as JSONObject).optInt("index")
@@ -123,9 +123,9 @@ internal class PageListExamplePage : BasePager() {
         super.created()
         // mock数据
         for (i in 0 until 5) {
-            pageItems.add(PageItem().apply {
+            pageItems.add(PageItem(this).apply {
                 for (j in 0 until 30) {
-                    dataList.add(CardData().apply {
+                    dataList.add(CardData(this@PageListExamplePage).apply {
                         title = "pageIndex:" + i + " listIndex:" + j
                     })
                 }
@@ -144,10 +144,10 @@ internal class TabItem {
     var title : String = ""
 }
 
-internal class PageItem {
-    var dataList by observableList<CardData>()
+internal class PageItem(scope: PagerScope) {
+    var dataList by scope.observableList<CardData>()
 }
 
-internal class  CardData {
-    var title by observable("")
+internal class CardData(scope: PagerScope) {
+    var title by scope.observable("")
 }

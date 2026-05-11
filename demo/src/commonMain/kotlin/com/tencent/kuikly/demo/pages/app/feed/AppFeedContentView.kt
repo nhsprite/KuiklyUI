@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,10 +21,12 @@ import com.tencent.kuikly.core.base.ComposeEvent
 import com.tencent.kuikly.core.base.ComposeView
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.module.CallbackRef
+import com.tencent.kuikly.core.module.NotifyModule
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.app.common.ParsedText
-
+import com.tencent.kuikly.demo.pages.app.theme.ThemeManager
 
 internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedContentViewEvent>() {
 
@@ -33,6 +35,15 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
     }
 
     private var content by observable("")
+    private var theme by observable(ThemeManager.getTheme())
+    private lateinit var eventCallbackRef: CallbackRef
+
+    override fun viewDestroyed() {
+        super.viewDestroyed()
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, eventCallbackRef)
+    }
+
 
     override fun createEvent(): AppFeedContentViewEvent {
         return AppFeedContentViewEvent()
@@ -45,6 +56,10 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
     override fun created() {
         super.created()
         initContent()
+        eventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(ThemeManager.SKIN_CHANGED_EVENT) { _ ->
+                theme = ThemeManager.getTheme()
+            }
     }
 
     private fun initContent() {
@@ -66,12 +81,12 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
                 ParsedText {
                     attr {
                         text(ctx.content)
-                        color(Color.BLACK)
+                        color(ctx.theme.colors.feedContentText)
                         fontSize(15.0f)
 
                         matchText {
                             pattern = "\\[(@[^:]+):([^\\]]+)\\]"
-                            color = Color(0xff5B778D)
+                            color = ctx.theme.colors.feedContentQuoteText
                             fontSize = 15.0f
                             rendText = fun(str, pattern): Map<String, String> {
                                 val result = mutableMapOf<String, String>()
@@ -90,14 +105,14 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
 
                         matchText {
                             pattern = "#.*?#"
-                            color = Color(0xff5B778D)
+                            color = ctx.theme.colors.feedContentQuoteText
                             fontSize = 15.0f
                             rendText = fun(str, pattern): Map<String, String> {
                                 val result = mutableMapOf<String, String>()
-                                val idStr = str.substring(str.indexOf(":") + 1, str.lastIndexOf("#"));
+                                val idStr = str.substring(str.indexOf(":") + 1, str.lastIndexOf("#"))
                                 val showStr = str.substring(str.indexOf("#"), str.lastIndexOf("#") + 1).replace(
-                                    ":$idStr", "");
-                                result["display"] = showStr;
+                                    ":$idStr", "")
+                                result["display"] = showStr
                                 result["value"] = idStr
                                 return result
                             }
@@ -108,6 +123,7 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
 
                         matchText {
                             pattern = "(\\\\[/).*?(\\\\])"
+                            color = ctx.theme.colors.feedContentText
                             fontSize = 15.0f
                             rendText = fun(str, pattern): Map<String, String> {
                                 val result = mutableMapOf<String, String>()
@@ -124,10 +140,10 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
                         matchText {
                             pattern = "全文"
                             fontSize = 15.0f
-                            color = Color(0xff5B778D)
+                            color = ctx.theme.colors.feedContentQuoteText
                             rendText = fun(str, pattern): Map<String, String> {
                                 val result = mutableMapOf<String, String>()
-                                result["display"] = "全文";
+                                result["display"] = "全文"
                                 result["value"] = "全文"
                                 return result
                             }
@@ -144,7 +160,6 @@ internal class AppFeedContentView: ComposeView<AppFeedContentViewAttr, AppFeedCo
     }
 }
 
-
 internal class AppFeedContentViewAttr : ComposeAttr() {
     var content: String = ""
         set(value) {
@@ -156,9 +171,7 @@ internal class AppFeedContentViewAttr : ComposeAttr() {
         }
 }
 
-internal class AppFeedContentViewEvent : ComposeEvent() {
-    
-}
+internal class AppFeedContentViewEvent : ComposeEvent()
 
 internal fun ViewContainer<*, *>.AppFeedContent(init: AppFeedContentView.() -> Unit) {
     addChild(AppFeedContentView(), init)

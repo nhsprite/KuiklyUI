@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -31,7 +31,7 @@ object ConvertUtil {
         if (value is String) {
            return value.length > 0
         } else if (value is Number) {
-            return value.toFloat() != 0.0f;
+            return value.toFloat() != 0.0f
         } else if (value is Boolean) {
             return value
         }
@@ -45,7 +45,7 @@ object ConvertUtil {
         if (value.isNaN()) {
             return 0f
         }
-        if (PagerManager.getCurrentPager().pageData.isIOS) { // iOS 不存在精度转换问题
+        if (PagerManager.getCurrentPager().pageData.isIOS || PagerManager.getCurrentPager().pageData.isMacOS) { // iOS 不存在精度转换问题
             return value
         }
         val density = PagerManager.getCurrentPager().pagerDensity()
@@ -64,7 +64,7 @@ object ConvertUtil {
     fun parseString16ToLong(str16: String?): Long {
         var str16 = str16 ?: throw NumberFormatException("null")
         //先转化为小写
-        str16 = str16.toLowerCase()
+        str16 = str16.lowercase()
         //如果字符串以0x开头，去掉0x
         str16 = if (str16.startsWith("0x")) str16.substring(2) else str16
         if (str16.length > 16) {
@@ -80,7 +80,7 @@ object ConvertUtil {
      */
     private fun parseMd5L16ToLong(md5L16: String?): Long {
         var md5L16 = md5L16 ?: throw RuntimeException("null")
-        md5L16 = md5L16.toLowerCase()
+        md5L16 = md5L16.lowercase()
         val bA = md5L16.encodeToByteArray()
         var re = 0L
         for (i in bA.indices) {

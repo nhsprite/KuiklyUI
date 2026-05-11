@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,27 +21,25 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.Process
 import com.tencent.kuikly.core.nvi.NativeBridge
+import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 
 /**
  * KTV页面执行环境调度器
  */
 object KuiklyRenderCoreContextScheduler : IKuiklyRenderCoreScheduler {
 
-    private val contextQueueHandlerThread by lazy {
-        val ht = object : HandlerThread("HRContextQueueHandlerThread", Process.THREAD_PRIORITY_FOREGROUND) {
-            override fun onLooperPrepared() {
-                NativeBridge.isContextThread = true
-            }
-        }
-        ht.start()
-        ht
-    }
+    const val THREAD_NAME = "HRContextQueueHandlerThread"
 
     private val handler by lazy {
-        Handler(contextQueueHandlerThread.looper)
+        val stackSize = KuiklyRenderAdapterManager.krThreadAdapter?.stackSize() ?: -1L
+        Handler(if (stackSize <= 0L) {
+            HandlerThread(THREAD_NAME, Process.THREAD_PRIORITY_FOREGROUND).apply { start() }.looper
+        } else {
+            KRHandlerThread(THREAD_NAME, Process.THREAD_PRIORITY_FOREGROUND, stackSize).apply { start() }.looper
+        })
     }
 
-    override fun scheduleTask(delayMs: Long, task: KuiklyRenderCoreTask) {
+    override fun scheduleTask(delayMs: Long, task: Runnable) {
         handler.postDelayed(task, delayMs)
     }
 

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,10 +15,9 @@
 
 package com.tencent.kuikly.core.module
 
-import com.tencent.kuikly.core.collection.fastArrayListOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
 import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
-
 
 /**
  *  日期计算，通过 [newCalendarInstance] 拿到 [ICalendar] 实例，然后可访问 [ICalendar] 提供读写的接口
@@ -92,7 +91,7 @@ class CalendarModule : Module() {
 
     private inner class Calendar(val originTimestamp: Long) : ICalendar {
 
-        private val operationRecords = fastArrayListOf<Operation>()
+        private val operationRecords = fastMutableListOf<Operation>()
 
         override fun set(field: ICalendar.Field, value: Int): ICalendar {
             operationRecords.add(Operation.Set(field, value))
@@ -195,7 +194,6 @@ interface ICalendar {
      */
     fun get(field: Field): Int
 
-
     /**
      * 获取当前日历的时间戳，单位毫秒
      */
@@ -225,4 +223,3 @@ private fun List<Operation>.toJSONArray(): JSONArray {
     }
     return jsonArray
 }
-

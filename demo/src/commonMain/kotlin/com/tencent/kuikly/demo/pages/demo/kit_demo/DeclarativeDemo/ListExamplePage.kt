@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,9 +22,10 @@ import com.tencent.kuikly.core.directives.vbind
 import com.tencent.kuikly.core.directives.vfor
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
+import com.tencent.kuikly.core.timer.setTimeout
 import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.views.compose.Button
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.demo.pages.base.ktx.setTimeout
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 import kotlin.math.max
 import kotlin.random.Random
@@ -41,6 +42,9 @@ internal class ListExamplePage: BasePager() {
 
     private lateinit var footerRefreshView: FooterRefreshView
     private lateinit var headerRefreshView: RefreshView
+
+    private lateinit var scrollView: ListView<*, *>
+
     private var footerRefreshState by observable(FooterRefreshState.IDLE)
     private var headerRefreshText by observable("下拉刷新")
 
@@ -53,9 +57,32 @@ internal class ListExamplePage: BasePager() {
         return {
             attr { backgroundColor(Color.WHITE) }
             NavBar { attr { title = "List Example" } }
+
+            Button {
+                attr {
+                    titleAttr {
+                        text("点击滚动到具体位置")
+                    }
+
+                }
+                event {
+                    click {
+                        ctx.scrollView.setContentOffset(0f, 800f, true, SpringAnimation(300, 0.55f, 0f))   // 快速回弹手感)
+                    }
+                }
+
+            }
+
             List {
+                ctx.scrollView = this
                 attr {
                     flex(1f)
+
+                }
+                event {
+                    scrollToTop {
+                        println("statusbar: scrollToTop prevent")
+                    }
                 }
                 Refresh {
                     ctx.headerRefreshView = this

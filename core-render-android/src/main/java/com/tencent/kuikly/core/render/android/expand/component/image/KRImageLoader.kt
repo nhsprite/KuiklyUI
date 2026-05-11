@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,33 +16,48 @@
 package com.tencent.kuikly.core.render.android.expand.component.image
 
 import android.graphics.drawable.Drawable
+import com.tencent.kuikly.core.render.android.KuiklyRenderViewContext
 import com.tencent.kuikly.core.render.android.adapter.HRImageLoadOption
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 import com.tencent.kuikly.core.render.android.context.KuiklyRenderCoreExecuteModeBase
+import org.json.JSONObject
 
 typealias FetchImageCallback = (drawable: Drawable?) -> Unit
 
 /**
  * 图片加载器
  */
-class KRImageLoader(val executeMode: KuiklyRenderCoreExecuteModeBase, val assetsPath: String?) {
+class KRImageLoader(
+    private val kuiklyRenderViewContext: KuiklyRenderViewContext,
+    val executeMode: KuiklyRenderCoreExecuteModeBase,
+    val assetsPath: String?
+) {
 
     /**
      * 异步拉取图片并解码返回 Drawable
      *
      * @param options 图片加载参数
+     * @param imageParams 图片额外参数
      * @param callback 图片加载回调
      */
-    fun fetchImageAsync(options: HRImageLoadOption, callback: FetchImageCallback) {
+    fun fetchImageAsync(options: HRImageLoadOption, imageParams: JSONObject?, callback: FetchImageCallback) {
         convertAssetsPathIfNeed(options)
-        KuiklyRenderAdapterManager.krImageAdapter?.fetchDrawable(options, callback)
+        KuiklyRenderAdapterManager.krImageAdapter?.fetchDrawable(options, imageParams, callback)
+    }
+
+    fun getImageWidth(drawable: Drawable): Float {
+        return KuiklyRenderAdapterManager.krImageAdapter?.getDrawableWidth(kuiklyRenderViewContext, drawable) ?: 0f
+    }
+
+    fun getImageHeight(drawable: Drawable): Float {
+        return KuiklyRenderAdapterManager.krImageAdapter?.getDrawableHeight(kuiklyRenderViewContext, drawable) ?: 0f
     }
 
     /**
      * 非内置场景需要将 assets 图片转换为本地路径
      */
-    private fun convertAssetsPathIfNeed(options: HRImageLoadOption) {
-        executeMode.convertAssetsPathIfNeed(options, assetsPath);
+    fun convertAssetsPathIfNeed(options: HRImageLoadOption) {
+        executeMode.convertAssetsPathIfNeed(options, assetsPath)
     }
 
 }

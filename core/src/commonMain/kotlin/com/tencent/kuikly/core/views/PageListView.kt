@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,21 +15,21 @@
 
 package com.tencent.kuikly.core.views
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.ContainerAttr
+import com.tencent.kuikly.core.base.DeclarativeBaseView
+import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.base.domChildren
 import com.tencent.kuikly.core.base.event.EventHandlerFn
-import com.tencent.kuikly.core.base.event.appearPercentage
+import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.collection.toFastList
-import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.layout.FlexDirection
-import com.tencent.kuikly.core.layout.Frame
-import com.tencent.kuikly.core.layout.undefined
-import com.tencent.kuikly.core.layout.valueEquals
 import com.tencent.kuikly.core.layout.FlexPositionType
+import com.tencent.kuikly.core.layout.Frame
 import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * 创建一个分页组件实例并添加到视图容器中。
@@ -147,7 +147,7 @@ open class PageListAttr : ListAttr() {
 
 open class PageListEvent : ListEvent() {
 
-    private val willDragEndHandlers = arrayListOf<(WillEndDragParams) -> Unit>()
+    private val willDragEndHandlers = fastArrayListOf<(WillEndDragParams) -> Unit>()
 
     /**
      * 设置页面索引改变时的事件处理器。
@@ -221,14 +221,52 @@ open class PageListView<A : PageListAttr, E : PageListEvent> : ListView<A, E>() 
 
     /*
      * 滚动到某一个pageIndex
+     *
      */
+    @Deprecated(
+        level = DeprecationLevel.HIDDEN,
+        replaceWith = ReplaceWith("scrollToPageIndex(index,animated, springAnimation)"),
+        message = "Use another scrollToPageIndex() method with springAnimation parameter instead"
+    )
+    @Suppress("DEPRECATION")
     fun scrollToPageIndex(index: Int, animated: Boolean = false) : Boolean {
+        return scrollToPageIndex(index, animated, null)
+    }
+
+    /*
+     * 自定义动画效果，滚动到某一个pageIndex。
+     */
+    fun scrollToPageIndex(index: Int, animated: Boolean = false, springAnimation: SpringAnimation? = null) : Boolean {
         if (contentView == null || attr.flexNode == null || contentView!!.flexNode.layoutFrame.isDefaultValue()) {
             return false
         }
         var result = false
         contentView?.getSubview(index)?.flexNode?.layoutFrame?.also {
-            setContentOffset(it.x, it.y, animated)
+            val indexSize = contentView?.getSubviews()?.size
+            var x = it.x
+            var y = it.y
+            // 由于浮点计算误差可能导致内容宽高溢出而无法滚动，故此处这里做出判断
+            if (indexSize != null && index == indexSize - 1) {
+                val density = attr.pagerData.density
+                if (attr.isHorizontalDirection) {
+                    val pageListViewRenderWidth = (this.flexNode.layoutFrame.width * density).roundToInt()
+                    val contentViewRenderWidth = (contentView?.flexNode?.layoutFrame?.width!! * density).roundToInt()
+                    val renderMaxX = contentViewRenderWidth - pageListViewRenderWidth
+                    val renderX = (it.x * density).roundToInt()
+                    if (renderX > renderMaxX) {
+                        x = renderMaxX / density
+                    }
+                } else {
+                    val pageListViewRenderHeight = (this.flexNode.layoutFrame.height * density).roundToInt()
+                    val contentViewRenderHeight = (contentView?.flexNode?.layoutFrame?.height!! * density).roundToInt()
+                    val renderMaxY = contentViewRenderHeight - pageListViewRenderHeight
+                    val renderY = (it.y * density).roundToInt()
+                    if (renderY > renderMaxY) {
+                        y = renderMaxY / density
+                    }
+                }
+            }
+            setContentOffset(x, y, animated, springAnimation)
             result = true
         }
         return result
@@ -291,7 +329,7 @@ open class PageListView<A : PageListAttr, E : PageListEvent> : ListView<A, E>() 
         return CrossItemViewInfo(crossItemView, crossPercentage01, currentOffset, index)
     }
 
-    data class CrossItemViewInfo(val itemView : DeclarativeBaseView<*, *>?, val crossPercentage01: Float, val offset : Float, val index: Int) {}
+    data class CrossItemViewInfo(val itemView : DeclarativeBaseView<*, *>?, val crossPercentage01: Float, val offset : Float, val index: Int)
 
     override fun createContentView(): ScrollerContentView {
         return PageListContentView()
@@ -324,7 +362,6 @@ open class PageListContentView : ListContentView() {
         super.didInsertDomChild(child, index)
         fillSubViewLayoutAttr(child)
     }
-
 
     private fun fillSubViewLayoutAttr(subView: DeclarativeBaseView<*, *>) {
         val parentView = parent!!
@@ -371,18 +408,20 @@ open class PageListContentView : ListContentView() {
         }
         getPager().addTaskWhenPagerUpdateLayoutFinish {
             // update offset
-            val pageListAttr = (parent as PageListView<*, *>).getViewAttr()
-            val index = currentPageIndex
-            if (pageListAttr.isHorizontalDirection) {
-                (parent as PageListView<*, *>).setContentOffset(index * pageListAttr.flexNode!!.styleWidth, 0f)
+            val pageListView = parent as? PageListView<*, *>
+            if (pageListView == null) {
+                KLog.e("KuiklyError", "autoResetOffsetIfNeed: parent is not a PageListView")
             } else {
-                (parent as PageListView<*, *>).setContentOffset(0f, index * pageListAttr.flexNode!!.styleHeight)
+                val pageListAttr = pageListView.getViewAttr()
+                val index = currentPageIndex
+                if (pageListAttr.isHorizontalDirection) {
+                    pageListView.setContentOffset(index * pageListAttr.flexNode!!.styleWidth, 0f)
+                } else {
+                    pageListView.setContentOffset(0f, index * pageListAttr.flexNode!!.styleHeight)
+                }
             }
         }
     }
-
-
-
 
     private fun syncDefaultPageIndexIfNeed(frame: Frame) {
         if (!didInitDefaultPageIndex && frame.width > 0 && frame.height > 0) {
@@ -432,7 +471,7 @@ open class PageListContentView : ListContentView() {
         val decimalPart = floatIndex - floatIndex.toInt()
         val indexRatio = 0.05f
         if (decimalPart > indexRatio && decimalPart < (1 - indexRatio)) {
-            return -1;
+            return -1
         }
         return (floatIndex + indexRatio).toInt()
     }
@@ -462,5 +501,5 @@ open class PageListContentView : ListContentView() {
                 .onFireEvent(PageListEvent.PageListEventConst.PAGE_INDEX_DID_CHANGED, data)
         }
     }
-}
 
+}

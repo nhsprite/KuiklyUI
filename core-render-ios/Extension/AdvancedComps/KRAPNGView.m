@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -94,8 +94,8 @@ static APNGViewCreator gAPNGViewCreator;
 - (void)setCss_repeatCount:(NSNumber *)css_repeatCount {
     _css_repeatCount = css_repeatCount;
     _apngView.playCount = [KRConvertUtil NSInteger:css_repeatCount];
-    if ([_apngView respondsToSelector:@selector(setShowLastImgaeWhenPause:)]) {
-         [_apngView setShowLastImgaeWhenPause:YES];
+    if ([_apngView respondsToSelector:@selector(setShowLastImageWhenPause:)]) {
+         [_apngView setShowLastImageWhenPause:YES];
     }
 }
 

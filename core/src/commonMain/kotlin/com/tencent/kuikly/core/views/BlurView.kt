@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,7 +19,6 @@ import com.tencent.kuikly.core.base.*
 import com.tencent.kuikly.core.base.event.Event
 import kotlin.math.min
 
-
 /*
  * 实时高斯模糊（毛玻璃）类（用于该view背后的内容区域进行高斯模糊，若背后内容发生变化，该高斯模糊会实时变化）
  */
@@ -28,12 +27,12 @@ class BlurView : DeclarativeBaseView<BlurAttr, Event>() {
     override fun createAttr(): BlurAttr = BlurAttr()
     override fun createEvent(): Event = Event()
     override fun viewName(): String {
-        return ViewConst.TYPE_BLUR_VIEW;
+        return ViewConst.TYPE_BLUR_VIEW
     }
 
     override fun willInit() {
         super.willInit()
-        if (getPager().pageData.isIOS) {
+        if (getPager().pageData.isIOS || getPager().pageData.isMacOS) {
             getViewAttr().backgroundColor(Color(red255 = 0, green255 = 0, blue255 = 0, alpha01 = 0.1f))
         } else {
             getViewAttr().backgroundColor(Color(red255 = 255, green255 = 255, blue255 = 255, alpha01 = 0.1f))
@@ -68,7 +67,6 @@ class BlurAttr : Attr() {
         "blurOtherLayer" with blur.toInt()
     }
 }
-
 
 /*
  * 实时高斯模糊（毛玻璃）类（用于该view背后的内容区域进行高斯模糊，若背后内容发生变化，该高斯模糊会实时变化）

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -20,6 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 extern NSString *const kSetCurrentUIAsFirstScreenForNextLaunchNotificationName;
 /** 关闭TurboDisplay模式通知 */
 extern NSString *const kCloseTurboDisplayNotificationName;
+/** 清除当前页面TurboDisplay缓存通知 */
+extern NSString *const kClearCurrentPageCacheNotificationName;
 
 /*
  * @brief TurboDisplay首屏直出渲染模式（通过直接执行二进制产物渲染生成首屏，避免业务代码执行后再生成的首屏等待耗时）

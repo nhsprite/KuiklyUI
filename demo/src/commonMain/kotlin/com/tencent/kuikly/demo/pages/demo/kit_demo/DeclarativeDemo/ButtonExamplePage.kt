@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package com.tencent.kuikly.demo.pages.demo.kit_demo.DeclarativeDemo
 
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.List
 import com.tencent.kuikly.core.views.compose.Button
@@ -153,6 +154,7 @@ internal class ButtonExampleEventView: ComposeView<ComposeAttr, ComposeEvent>() 
                     longPress {
                         ctx.longPressCount ++
                         ctx.longPressButtonTitle = if (ctx.longPressCount == 1) "我被长按啦" else if (ctx.longPressCount == 2) "我又被长按啦" else "我被长按了${ctx.longPressCount}次"
+                        KLog.d("longPressParams", it.toString())
                     }
                 }
             }

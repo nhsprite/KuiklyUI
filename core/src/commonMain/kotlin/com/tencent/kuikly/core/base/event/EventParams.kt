@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,8 +16,6 @@
 package com.tencent.kuikly.core.base.event
 
 import com.tencent.kuikly.core.collection.fastArrayListOf
-import com.tencent.kuikly.core.exception.throwRuntimeError
-import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 
 /**
@@ -26,6 +24,8 @@ import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 data class ClickParams(
     val x: Float,
     val y: Float,
+    val pageX: Float, // 触摸点在根视图Page下的坐标X
+    val pageY: Float, // 触摸点在根视图Page下的坐标Y
     val params: Any? = null
 ) {
     companion object {
@@ -33,7 +33,9 @@ data class ClickParams(
             val tempParams = params as? JSONObject ?: JSONObject()
             val x = tempParams.optDouble("x").toFloat()
             val y = tempParams.optDouble("y").toFloat()
-            return ClickParams(x, y, params)
+            val pageX = tempParams.optDouble("pageX").toFloat()
+            val pageY = tempParams.optDouble("pageY").toFloat()
+            return ClickParams(x, y, pageX, pageY, params)
         }
     }
 }
@@ -43,9 +45,11 @@ data class TouchParams(
     val y: Float, // 触摸点在自身view坐标系下的坐标Y
     val pageX: Float, // 触摸点在根视图Page下的坐标X
     val pageY: Float, // 触摸点在根视图Page下的坐标Y
+    val timestamp: Long, // 触发事件时，距离系统启动的毫秒数
     val pointerId: Int, // 触摸点的ID
     val action: String, // 事件类型, 该属性从1.1.86版本开始支持，之前的版本获取为空
-    val touches: List<Touch> // 包含所有多指触摸信息
+    val touches: List<Touch>, // 包含所有多指触摸信息
+    val consumed: Boolean // 是否已经被消费了，来自渲染层的消费状态，目前用于滑动中
 ) {
     companion object {
         fun decode(params: Any?): TouchParams {
@@ -54,16 +58,17 @@ data class TouchParams(
             val y = tempParams.optDouble("y").toFloat()
             val pageX = tempParams.optDouble("pageX").toFloat()
             val pageY = tempParams.optDouble("pageY").toFloat()
+            val timestamp = tempParams.optDouble("timestamp").toLong()
             val pointerId = tempParams.optInt("pointerId")
             val action =  tempParams.optString("action")
-            val touches = fastArrayListOf<Touch>()
+            val consumed = tempParams.optInt("consumed", 0) == 1
+            val touches = arrayListOf<Touch>()
             tempParams.optJSONArray("touches")?.also {
                 for (i in 0 until it.length()) {
                     touches.add(Touch.decode(it.opt(i)))
                 }
             }
-
-            return TouchParams(x, y, pageX, pageY, pointerId, action, touches)
+            return TouchParams(x, y, pageX, pageY, timestamp, pointerId, action, touches, consumed)
         }
     }
 }
@@ -73,7 +78,8 @@ data class Touch(
     val y: Float,
     val pageX: Float,
     val pageY: Float,
-    val pointerId: Int
+    val hash: Float,
+    val pointerId: Long
 ) {
     companion object {
         fun decode(params: Any?): Touch {
@@ -82,13 +88,14 @@ data class Touch(
             val y = tempParams.optDouble("y").toFloat()
             val pageX = tempParams.optDouble("pageX").toFloat()
             val pageY = tempParams.optDouble("pageY").toFloat()
-            val pointerId = tempParams.optInt("pointerId")
-            return Touch(x, y, pageX, pageY, pointerId)
+            val hash = tempParams.optLong("hash").toFloat()
+            val pointerId = tempParams.optLong("pointerId", 5566L)
+            return Touch(x, y, pageX, pageY, hash, pointerId)
         }
     }
 
     override fun toString(): String {
-        return "x:${x}, y:${y}, pageX:${pageX}, pageY:${pageY}"
+        return "x:${x}, y:${y}, pageX:${pageX}, pageY:${pageY} hash:${hash} pointerId:${pointerId}"
     }
 }
 
@@ -98,15 +105,21 @@ data class Touch(
 data class LongPressParams(
     val x: Float,
     val y: Float,
-    val state: String // "start" | "move" | "end"
+    val pageX: Float, // 触摸点在根视图Page下的坐标X
+    val pageY: Float, // 触摸点在根视图Page下的坐标Y
+    val state: String, // "start" | "move" | "end"
+    val isCancel: Boolean
 ) {
     companion object {
         fun decode(params: Any?): LongPressParams {
             val tempParams = params as? JSONObject ?: JSONObject()
             val x = tempParams.optDouble("x").toFloat()
             val y = tempParams.optDouble("y").toFloat()
+            val pageX = tempParams.optDouble("pageX").toFloat()
+            val pageY = tempParams.optDouble("pageY").toFloat()
             val state = tempParams.optString("state")
-            return LongPressParams(x, y, state)
+            val isCancel = tempParams.optBoolean("isCancel")
+            return LongPressParams(x, y, pageX, pageY, state, isCancel)
         }
     }
 }

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,15 +14,17 @@
  */
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h"
 #import "KuiklyRenderView.h"
+#import "KRBackPressModule.h"
+#import "KRTurboDisplayConfig.h"
 
 typedef void (^KuiklyContextCodeCallback)(NSString * _Nullable contextCode, NSError * _Nullable error);
 @protocol KRPerformanceDataProtocol;
 
 NS_ASSUME_NONNULL_BEGIN
 /** Snapshot页面快照Key. */
-UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
+FOUNDATION_EXTERN NSString *const KRPageDataSnapshotKey;
 @protocol KuiklyRenderViewControllerBaseDelegatorDelegate;
 @protocol KRControllerDelegatorLifeCycleProtocol;
 /*
@@ -97,6 +99,29 @@ UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
  */
 + (BOOL)isPageExistWithPageName:(NSString *)pageName frameworkName:(NSString *)frameworkName;
 
+/*
+ * @brief 获取kmm工程打包的framework名字,并将获取到的名字传入callback处理
+ * @param callback 处理获取到的framework名字的回调函数
+ */
+- (void)fetchContextCodeWithResultCallback:(KuiklyContextCodeCallback)callback;
+/*
+ * @brief 创建Kuikly接入模式实例
+ * @param contextCode kmm工程打包的framework名字
+ */
+- (KuiklyBaseContextMode *)createContextMode:(NSString * _Nullable) contextCode;
+/*
+ * @brief 初始化renderView
+ * @param contextCode kmm工程打包的framework名字
+ */
+- (void)initRenderViewWithContextCode:(NSString *)contextCode;
+
+
+/*
+ * @brief 返回手势处理，获取系统手势后发送至Koltin侧，获取当前是否要消费此手势
+ * @param completion 回调 Block,在主线程执行,返回是否被 Kotlin 侧消费
+ */
+- (void)onBackPressedWithCompletion:(nullable KuiklyBackPressCompletion)completion;
+
 @end
 
 @protocol KuiklyRenderViewControllerBaseDelegatorDelegate<NSObject>
@@ -132,6 +157,17 @@ UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
  * @return 字典类型数据，其中value仅支持基础数据结构，如NSString，NSNumber，NSArray，NSDictionary等可被json序列化数据结构
  */
 - (NSDictionary<NSString *, NSObject *> * _Nullable)contextPageData;
+
+/*
+ * @breif 用于支持在SPM接入等场景下，资源放置于非mainBundle根目录时，指定自定义目录
+ * @return 自定义资源目录地址
+ *
+ * 示例：资源目录可以以如下格式传入：
+ * [[[NSBundle mainBundle] bundleURL] URLByAppendingPathComponent:@"shared_SharedResource.bundle/KuiklyResources"]；
+ * 将“shared_SharedResource”和“KuiklyResources”分别替换为实际的bundle名和子目录名。
+ */
+- (NSURL *)resourceFolderUrlForKuikly:(NSString *)pageName;
+
 /*
  * @breif 发生未处理的kotlin代码异常时回调，回调完后，直接crash
  * @param exReason, 异常原因, 如ThrowArrayIndexOutOfBoundsException
@@ -152,6 +188,11 @@ UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
                       mode:(KuiklyContextMode)mode;
 
 /*
+ * @breif viewWillDisappear的时候回调，业务可在此回调中获取性能数据。
+ */
+- (void)onGetPerformanceData;
+
+/*
  * @brief 首屏是否同步渲染（默认framework模式为同步方式）
  * @return 是否同步渲染首屏
  */
@@ -165,6 +206,34 @@ UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
  * @return 返回该页面的TurboDisplayKey（一般可为PageName，若为nil，则为关闭TurboDisplay渲染模式）
  */
 - (NSString * _Nullable)turboDisplayKey;
+
+
+/*
+ * @brief 设置 当前页面获取信息来源的window 为 业务在 vc 中指定window
+ */
+- (UIWindow * _Nullable) viewControllerHostWindow;
+
+
+/*
+ * @brief 配置 TurboDisplay 的全局参数
+ * @param config 可调用方法中配置 Diff-DOM 模式、延迟 Diff 模式、自动刷新首屏
+ * @warning configureTurboDisplay 方法不可单独实现，需同时声明 TurboDisplayKey 方法
+ *
+ * 示例用法：
+ * - (KRTurboDisplayConfig*)configureTurboDisplay {
+ *     // 1. 定义 TurboDisplayConfig 实例
+ *     KRTurboDisplayConfig *config = [[KRTurboDisplayConfig alloc] init];
+ *     // 2. 配置功能项
+ *     // 启用 Diff-DOM 结构变化支持（默认已启用）
+ *     [config enableDiffDOMStructureAware];
+ *     // 启用延迟 Diff（默认禁用）
+ *     [config enableDelayedDiff];
+ *     // 启用自动刷新（默认已启用）
+ *     [config disableCloseAutoUpdateTurboDisplay];
+ *     return config;
+ * }
+ */
+- (KRTurboDisplayConfig*)configureTurboDisplay;
 
 @end
 
@@ -187,6 +256,10 @@ UIKIT_EXTERN NSString *const KRPageDataSnapshotKey;
 - (void)willInitRenderView;
 /// kuiklyRenderView创建完成后调用
 - (void)didInitRenderView;
+/// kuiklyRenderCore将要初始化时调用
+- (void)willInitRenderCore;
+/// kuiklyRenderCore初始化完成调用
+- (void)didInitRenderCore;
 /// kuiklyRenderView被成功发送事件时调用
 - (void)didSendEvent:(NSString *)event;
 /// 对齐所在VC的viewWillAppear时机

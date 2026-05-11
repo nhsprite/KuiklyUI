@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,14 +19,12 @@ import com.tencent.kuikly.core.base.Attr
 import com.tencent.kuikly.core.base.ContainerAttr
 import com.tencent.kuikly.core.base.DeclarativeBaseView
 import com.tencent.kuikly.core.base.ViewContainer
-import com.tencent.kuikly.core.base.domChildren
-import com.tencent.kuikly.core.layout.FlexNode
-import com.tencent.kuikly.core.layout.FlexPositionType
+import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.layout.Frame
 import com.tencent.kuikly.core.layout.undefined
 import com.tencent.kuikly.core.layout.valueEquals
-
 import kotlin.math.max
+
 /**
  * 瀑布流组件。
  * @param init 初始化函数。
@@ -115,8 +113,7 @@ class WaterfallListAttr : ListAttr() {
 /**
  * 瀑布流列表事件类，继承自 ListEvent。
  */
-class WaterfallListEvent : ListEvent() {
-}
+class WaterfallListEvent : ListEvent()
 
 class WaterfallListView :
     ListView<WaterfallListAttr, WaterfallListEvent>() {
@@ -161,16 +158,15 @@ class WaterfallContentView : ListContentView() {
                 left(0f)
                 right(Float.undefined)
                 bottom(Float.undefined)
-                if (child.getViewAttr().flexNode!!.styleWidth.isNaN()
-                ) {
+                if (child.getViewAttr().flexNode!!.styleWidth.isNaN()) {
                     width(ctx.columnWidth())
                 } else {
                     child.getViewAttr().isStaticWidth = true
                 }
             }
+        } else {
+            child.getViewAttr().isStaticWidth = true
         }
-
-
     }
 
     override fun createFlexNode() {
@@ -197,7 +193,7 @@ class WaterfallContentView : ListContentView() {
     override fun onPagerCalculateLayoutFinish() {
         val listView = (parent as WaterfallListView)
         val attr = listView.getViewAttr()
-        val minHeightArray = arrayListOf<Float>()
+        val minHeightArray = fastArrayListOf<Float>()
         var curAbsoluteNodeOffset = 0f
         for (i in 0 until attr.columnCount) {
             minHeightArray.add(attr.contentPaddingTop - attr.lineSpacing)
@@ -266,4 +262,3 @@ class WaterfallContentView : ListContentView() {
         }
     }
 }
-

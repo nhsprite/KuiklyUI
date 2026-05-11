@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,8 +17,10 @@ package com.tencent.kuikly.demo.pages.demo.catalog
 
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.core.annotations.Page
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.directives.vfor
+import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
 import com.tencent.kuikly.core.views.List
@@ -80,7 +82,6 @@ internal class ExampleIndexPage : BasePager() {
             declarativeExampleUrl = generateJumpUrl("FlexExamplePage")
         })
 
-
         itemList.add(ExampleItemData().apply {
             avatarText = "Zi"
             titleText = "View ZIndex"
@@ -93,6 +94,13 @@ internal class ExampleIndexPage : BasePager() {
             titleText = "KTView Animation"
             subtitleText = "简单好用的动画，也支持动画状态的监听"
             declarativeExampleUrl = generateJumpUrl("AnimationExamplePage")
+        })
+
+        itemList.add(ExampleItemData().apply {
+            avatarText = "LG"
+            titleText = "Liquid Glass (iOS Only)"
+            subtitleText = "iOS 液态玻璃效果"
+            declarativeExampleUrl = generateJumpUrl("LiquidGlassDemoPage")
         })
 
         itemList.add(ExampleItemData().apply {
@@ -112,8 +120,15 @@ internal class ExampleIndexPage : BasePager() {
         itemList.add(ExampleItemData().apply {
             avatarText = "In"
             titleText = "InputView"
-            subtitleText = "单行/多行(TextArea)输入框组件，用法一致"
+            subtitleText = "单行输入框组件"
             declarativeExampleUrl = generateJumpUrl("InputViewDemoPage")
+        })
+
+        itemList.add(ExampleItemData().apply {
+            avatarText = "Ta"
+            titleText = "TextArea"
+            subtitleText = "多行输入框，与 Input 用法一致，支持换行 / keyboardHeightChange / textLengthBeyondLimit 等"
+            declarativeExampleUrl = generateJumpUrl("TextAreaDemoPage")
         })
 
         itemList.add(ExampleItemData().apply {
@@ -122,7 +137,6 @@ internal class ExampleIndexPage : BasePager() {
             subtitleText = "和h5一致的canvas标签组件，实现自绘不规则图形"
             declarativeExampleUrl = generateJumpUrl("CanvasExamplePage")
         })
-
 
         itemList.add(ExampleItemData().apply {
             avatarText = "Bu"
@@ -154,7 +168,6 @@ internal class ExampleIndexPage : BasePager() {
             declarativeExampleUrl = generateJumpUrl("SliderPageViewDemoPage")
         })
 
-
         itemList.add(ExampleItemData().apply {
             avatarText = "Pa"
             titleText = "PageListView"
@@ -162,14 +175,12 @@ internal class ExampleIndexPage : BasePager() {
             declarativeExampleUrl = generateJumpUrl("PageListExamplePage")
         })
 
-
         itemList.add(ExampleItemData().apply {
             avatarText = "Mo"
             titleText = "ModalView"
             subtitleText = "全屏模态组件，用来做alert弹窗或者浮层"
             declarativeExampleUrl = generateJumpUrl("ModalViewDemoPage")
         })
-
 
         itemList.add(ExampleItemData().apply {
             avatarText = "Re"
@@ -219,7 +230,6 @@ internal class ExampleIndexPage : BasePager() {
             subtitleText = "悬停置顶，用于列表下的自动悬停（列表滚动可自动悬浮置顶）视图组件"
             declarativeExampleUrl = generateJumpUrl("HoverExamplePage")
         })
-
 
         // 缺mask
         itemList.add(ExampleItemData().apply {
@@ -271,6 +281,27 @@ internal class ExampleIndexPage : BasePager() {
             declarativeExampleUrl = generateJumpUrl("VideoExamplePage")
         })
 
+        // 仅在微信小程序平台展示 WX 组件 / API 示例
+        if (pageData.params.optString(IS_MINI_PROGRAM) == "1") {
+            itemList.add(ExampleItemData().apply {
+                avatarText = "WX"
+                titleText = "WX Demo"
+                subtitleText = "微信小程序封装组件示例（WXButton 等）"
+                declarativeExampleUrl = generateJumpUrl("WXExamplePage")
+            })
+            itemList.add(ExampleItemData().apply {
+                avatarText = "API"
+                titleText = "WX API Demo"
+                subtitleText = "微信小程序封装 API 示例（登录 / 存储 / Toast / 定位 / 扫码 等）"
+                declarativeExampleUrl = generateJumpUrl("WXApiExamplePage")
+            })
+            itemList.add(ExampleItemData().apply {
+                avatarText = "Raw"
+                titleText = "WX Raw API Demo"
+                subtitleText = "兜底桥：直接调用任意 wx.xxx"
+                declarativeExampleUrl = generateJumpUrl("WXRawApiExamplePage")
+            })
+        }
 
     }
 
@@ -278,11 +309,11 @@ internal class ExampleIndexPage : BasePager() {
         return pagerName
     }
 
+    companion object {
+        private const val IS_MINI_PROGRAM = "is_miniprogram"
+    }
+
 }
 
-internal class ExampleItemData {
-    var avatarText by observable("")
-    var titleText by observable("")
-    var subtitleText by observable("")
-    var declarativeExampleUrl by observable("")
-}
+// helper fun for refactoring
+private fun PagerScope.ExampleItemData() = ExampleItemData(this)

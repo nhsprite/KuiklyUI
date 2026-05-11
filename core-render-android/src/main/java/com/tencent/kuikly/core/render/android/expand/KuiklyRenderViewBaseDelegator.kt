@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -38,8 +38,11 @@ import com.tencent.kuikly.core.render.android.expand.component.blur.KRBlurView
 import com.tencent.kuikly.core.render.android.expand.component.list.KRRecyclerContentView
 import com.tencent.kuikly.core.render.android.expand.component.list.KRRecyclerView
 import com.tencent.kuikly.core.render.android.expand.component.pag.KRPAGView
+import com.tencent.kuikly.core.render.android.expand.module.KRBackPressModule
 import com.tencent.kuikly.core.render.android.expand.module.KRCalendarModule
 import com.tencent.kuikly.core.render.android.expand.module.KRCodecModule
+import com.tencent.kuikly.core.render.android.expand.module.KRFileModule
+import com.tencent.kuikly.core.render.android.expand.module.KRFontModule
 import com.tencent.kuikly.core.render.android.expand.module.KRLogModule
 import com.tencent.kuikly.core.render.android.expand.module.KRKeyboardModule
 import com.tencent.kuikly.core.render.android.expand.module.KRSharedPreferencesModule
@@ -50,6 +53,7 @@ import com.tencent.kuikly.core.render.android.expand.module.KRPerformanceModule
 import com.tencent.kuikly.core.render.android.expand.module.KRRouterModule
 import com.tencent.kuikly.core.render.android.expand.module.KRSnapshotModule
 import com.tencent.kuikly.core.render.android.expand.module.KRReflectionModule
+import com.tencent.kuikly.core.render.android.expand.module.KRVsyncModule
 import com.tencent.kuikly.core.render.android.export.IKuiklyRenderViewExport
 import com.tencent.kuikly.core.render.android.performace.IKRMonitorCallback
 import com.tencent.kuikly.core.render.android.performace.KRMonitorType
@@ -58,6 +62,7 @@ import com.tencent.kuikly.core.render.android.performace.KRPerformanceManager
 import com.tencent.kuikly.core.render.android.performace.frame.KRFrameMonitor
 import com.tencent.kuikly.core.render.android.performace.launch.KRLaunchData
 import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 宿主工程可使用此类来简化KuiklyRenderCore的接入, 该类是给页面粒度接入，View粒度使用[KuiklyView]
@@ -180,7 +185,7 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
     /**
      * 页面onCreate的时候调用
      * @param container Kuikly根View容器
-     * @param contextCode
+     * @param contextCode 执行上下文code
      * @param pageName 页面名字
      * @param pageData 页面数据
      * @param size 根View大小, 非必传
@@ -195,7 +200,9 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
         size: Size? = null,
         assetsPath: String? = null
     ) {
+        val tracer = KuiklyRenderTracer("$TAG onAttach")
         executeMode = delegate.coreExecuteModeX()
+        KuiklyRenderLog.d(TAG, "onAttach, pageName: $pageName, mode: $executeMode, size: $size container: $container")
         containerViewWeakRef = WeakReference(container)
         performanceManager = initPerformanceManager(pageName)
         this.pageName = pageName
@@ -203,6 +210,7 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
         this.pageData = pageData
         this.assetsPath = assetsPath
         loadingKuiklyRenderView(size)
+        tracer.end()
     }
 
     /**
@@ -287,12 +295,14 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
     }
 
     private fun tryRunKuiklyRenderViewPendingTask(kuiklyRenderView: KuiklyRenderView?) {
+        val tracer = KuiklyRenderTracer("$TAG tryRunKuiklyRenderViewPendingTask")
         kuiklyRenderView?.also { hrv ->
             pendingTaskList.forEach { task ->
                 task.invoke(hrv)
             }
             pendingTaskList.clear()
         }
+        tracer.end()
     }
 
     private fun initPerformanceManager(pageName: String): KRPerformanceManager? {
@@ -321,9 +331,13 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
     }
 
     private fun initRenderView(size: Size?) {
+        val tracer = KuiklyRenderTracer("$TAG initRenderView")
         KuiklyRenderLog.d(TAG, "initRenderView, executeMode: $executeMode, pageName: $pageName")
-        val containerView = containerViewWeakRef?.get() ?: return
-        renderView = KuiklyRenderView(containerView.context, executeMode, delegate.enablePreloadClass()).apply {
+        val containerView = containerViewWeakRef?.get() ?: run {
+            KuiklyRenderLog.e(TAG, "initRenderView, containerView is null")
+            return
+        }
+        renderView = KuiklyRenderView(containerView.context, executeMode, delegate.enablePreloadClass(), delegate).apply {
             registerCallback(renderViewCallback)
             registerKuiklyRenderExport(this)
             init(
@@ -343,6 +357,7 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
             }
         }
         containerView.addView(renderView)
+        KuiklyRenderLog.d(TAG, "--initRenderView addView--")
         delegate.onKuiklyRenderViewCreated()
         if (delegate.syncRenderingWhenPageAppear()) {
             renderView?.syncFlushAllRenderTasks()
@@ -351,7 +366,7 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
         pageData = null
         contextCode = null
         tryRunKuiklyRenderViewPendingTask(renderView)
-
+        tracer.end()
     }
 
     private fun handleException(throwable: Throwable, errorReason: ErrorReason) {
@@ -477,11 +492,23 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
             moduleExport(KRLogModule.MODULE_NAME) {
                 KRLogModule()
             }
+            moduleExport(KRFileModule.MODULE_NAME) {
+                KRFileModule()
+            }
             moduleExport(KRKeyboardModule.MODULE_NAME) {
                 KRKeyboardModule()
             }
             moduleExport(KRPerformanceModule.MODULE_NAME) {
                 KRPerformanceModule(performanceManager)
+            }
+            moduleExport(KRFontModule.MODULE_NAME) {
+                KRFontModule()
+            }
+            moduleExport(KRVsyncModule.MODULE_NAME) {
+                KRVsyncModule()
+            }
+            moduleExport(KRBackPressModule.MODULE_NAME) {
+                KRBackPressModule()
             }
             delegate.registerExternalModule(this) // 代理给外部，让宿主工程可以暴露自己的module
             delegate.registerTDFModule(this)
@@ -500,6 +527,27 @@ open class KuiklyRenderViewBaseDelegator(private val delegate: KuiklyRenderViewB
                 R.layout.kuikly_kr_recycler_view_layout,
                 null
             ) as IKuiklyRenderViewExport
+    }
+
+    /**
+     * 将返回键事件交由框架处理，建议参考以下接入方式：
+     *
+     *     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+     *         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+     *             kuiklyRenderViewDelegator.onBackPressed()
+     *             return true
+     *         }
+     *         return super.dispatchKeyEvent(event)
+     *     }
+     *
+     */
+    fun onBackPressed(): Boolean {
+        val isBackPressedConsumed = AtomicBoolean(false)
+        renderView?.onBackPressed()
+        renderView?.module<KRBackPressModule>(KRBackPressModule.MODULE_NAME)?.apply {
+            isBackPressedConsumed.set(isBackConsumed)
+        }
+        return isBackPressedConsumed.get()
     }
 
 }
@@ -611,4 +659,28 @@ interface KuiklyRenderViewBaseDelegatorDelegate {
                            errorReason: ErrorReason? = null,
                            executeMode: KuiklyRenderCoreExecuteModeBase) {}
 
+    /**
+     * 是否同步发送
+     * @param event 事件名称
+     * @return 是否同步，默认为false
+     */
+    fun syncSendEvent(event: String): Boolean {
+        return false
+    }
+    
+    fun useHostDisplayMetrics(): Boolean {
+        return false
+    }
+
+    fun enableContextReplace(): Boolean {
+        return false
+    }
+
+    /**
+     * 是否开启debug日志
+     * return Boolean,默认为false
+     */
+    fun debugLogEnable(): Boolean {
+        return false
+    }
 }

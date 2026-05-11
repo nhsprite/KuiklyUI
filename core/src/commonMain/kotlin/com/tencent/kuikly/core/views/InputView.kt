@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,6 +18,7 @@ package com.tencent.kuikly.core.views
 import com.tencent.kuikly.core.base.*
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.base.event.EventHandlerFn
+import com.tencent.kuikly.core.module.FontModule
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 
 class InputView : DeclarativeBaseView<InputAttr, InputEvent>() {
@@ -33,8 +34,6 @@ class InputView : DeclarativeBaseView<InputAttr, InputEvent>() {
     override fun viewName(): String {
         return ViewConst.TYPE_TEXT_FIELD
     }
-
-
 
     override fun createRenderView() {
         super.createRenderView()
@@ -100,7 +99,6 @@ class InputAttr : Attr() {
      * 主动设置输入框文本内容（该赋值会替换原输入框内容）
      * @param text 新输入框文本内容
      */
-
     fun text(text: String): InputAttr {
         TextConst.VALUE with text
         return this
@@ -122,6 +120,15 @@ class InputAttr : Attr() {
         return this
     }
 
+    fun fontSize(size: Float, scaleFontSizeEnable: Boolean? = null): InputAttr {
+        TextConst.FONT_SIZE with FontModule.scaleFontSize(size, scaleFontSizeEnable)
+        return this
+    }
+
+    fun lines(lines: Int): InputAttr {
+        TextConst.LINES with lines
+        return this
+    }
 
     fun fontWeightNormal(): InputAttr {
         TextConst.FONT_WEIGHT with "400"
@@ -147,11 +154,11 @@ class InputAttr : Attr() {
     }
 
     fun placeholderColor(color: Color) {
-        "placeholderColor" with color.toString()
+        TextConst.PLACEHOLDER_COLOR with color.toString()
     }
 
     fun placeholder(placeholder: String) {
-        "placeholder" with placeholder
+        TextConst.PLACEHOLDER with placeholder
     }
 
     fun keyboardTypePassword() {
@@ -164,6 +171,10 @@ class InputAttr : Attr() {
 
     fun keyboardTypeEmail() {
         KEYBOARD_TYPE with "email"
+    }
+
+    fun returnKeyTypeNone() {
+        RETURN_KEY_TYPE with "none"
     }
 
     fun returnKeyTypeSearch() {
@@ -194,6 +205,10 @@ class InputAttr : Attr() {
         RETURN_KEY_TYPE with "google"
     }
 
+    fun returnKeyTypePrevious() {
+        RETURN_KEY_TYPE with "previous"
+    }
+
     fun textAlignCenter(): InputAttr {
         TextConst.TEXT_ALIGN with "center"
         return this
@@ -209,8 +224,17 @@ class InputAttr : Attr() {
         return this
     }
 
+    @Deprecated(
+        "Use maxTextLength(length: Int, type: LengthLimitType) instead",
+        ReplaceWith("maxTextLength(maxLength, LengthLimitType)")
+    )
     fun maxTextLength(maxLength: Int) {
         "maxTextLength" with maxLength
+    }
+
+    fun maxTextLength(length: Int, type: LengthLimitType) {
+        "lengthLimitType" with type.value
+        "maxTextLength" with length
     }
 
     fun autofocus(focus: Boolean) {
@@ -245,19 +269,54 @@ class InputAttr : Attr() {
         return this
     }
 
+    /**
+     * 仅iOS支持
+     * 当设置为true的时候，输入框中如果是空的，则软键盘的Return Key会自动置灰禁用，非空的时候自动启用。
+     */
+    fun enablesReturnKeyAutomatically(flag: Boolean): InputAttr {
+        ENABLES_RETURN_KEY_AUTOMATICALLY with if( flag ) 1 else 0
+        return this
+    }
+
+    /**
+     * 是否启用拼音输入回调
+     * @param enable 是否启用，默认为false
+     */
+    fun enablePinyinCallback(enable: Boolean = false): InputAttr {
+        "enablePinyinCallback" with (if (enable) 1 else 0)
+        return this
+    }
+
+    /**
+     * 设置是否在点击 IME 动作按钮（如 Send/Go/Search）时自动收起键盘
+     *
+     * @param autoHide 是否自动收起键盘, 默认状态由三端各自的autoHideKeyboardOnImeAction决定
+     *                 - 若设置为true: 点击 Send 等按钮后自动收起键盘
+     *                 - 若设置为false: 点击 Send 等按钮后保持键盘打开，由业务自己控制
+     */
+    fun autoHideKeyboardOnImeAction(enable: Boolean): InputAttr {
+        TextConst.AUTO_HIDE_KEYBOARD_ON_IME_ACTION with (if (enable) 1 else 0)
+        return this
+    }
+
     companion object {
         const val RETURN_KEY_TYPE = "returnKeyType"
         const val KEYBOARD_TYPE = "keyboardType"
         const val IME_NO_FULLSCREEN = "imeNoFullscreen"
+        const val ENABLES_RETURN_KEY_AUTOMATICALLY =  "enablesReturnKeyAutomatically"
     }
 }
 
 data class InputParams(
-    val text: String
-    )
+    val text: String,
+    val imeAction: String? = null,
+    val length: Int? = null
+)
+
 data class KeyboardParams(
     val height: Float,
-    val duration: Float
+    val duration: Float,
+    val curve: Int = 0
 )
 
 class InputEvent : Event() {
@@ -270,7 +329,8 @@ class InputEvent : Event() {
         register(TEXT_DID_CHANGE, {
             it as JSONObject
             val text = it.optString("text")
-            handler(InputParams(text))
+            val length = if (it.has("length")) it.optInt("length") else null
+            handler(InputParams(text, length = length))
         }, isSync = isSyncEdit)
     }
 
@@ -306,27 +366,33 @@ class InputEvent : Event() {
         register(INPUT_RETURN){
             it as JSONObject
             val text = it.optString("text")
-            handler(InputParams(text))
+            val imeAction = it.optString("ime_action").ifEmpty {
+                getView()?.getViewAttr()?.getProp(InputAttr.RETURN_KEY_TYPE) as? String ?: ""
+            }
+            handler(InputParams(text, imeAction))
         }
     }
 
     /**
-     * 当键盘高度发生变化时调用的方法
-     * @param handler 处理键盘高度变化事件的回调函数
+     * Called when keyboard height changes.
+     * @param isSync Sync callback to ensure UI animation syncs with keyboard, default true
+     * @param handler Callback handler with keyboard params
      */
-    fun keyboardHeightChange(handler: (KeyboardParams) -> Unit) {
-        register(KEYBOARD_HEIGHT_CHANGE){
+    fun keyboardHeightChange(isSync: Boolean = true, handler: (KeyboardParams) -> Unit) {
+        register(KEYBOARD_HEIGHT_CHANGE, {
             it as JSONObject
             val height = it.optDouble("height").toFloat()
             val duration = it.optDouble("duration").toFloat()
-            handler(KeyboardParams(height, duration))
-        }
+            val curve = it.optInt("curve")
+            handler(KeyboardParams(height, duration, curve))
+        }, isSync = isSync)
     }
 
     /**
      * 当用户按下return键时调用的方法（与 inputReturn 方法相同）
      * @param handler 处理用户按下返回键事件的回调函数
      */
+    @Deprecated("Use inputReturn instead", ReplaceWith("inputReturn(handler)"))
     fun onTextReturn(handler: InputEventHandlerFn) {
         register(INPUT_RETURN){
             it as JSONObject
@@ -357,3 +423,26 @@ fun ViewContainer<*, *>.Input(init: InputView.() -> Unit) {
 }
 
 typealias InputEventHandlerFn = (InputParams) -> Unit
+
+/**
+ * 输入长度限制类型
+ *
+ * | 示例       | BYTE | CHARACTER | VISUAL_WIDTH | 说明                                  |
+ * |----------|------|-----------|--------------|-------------------------------------|
+ * | `""`       | 0    | 0         | 0            | 空字符串：0                              |
+ * | `"a"`      | 1    | 1         | 1            | 英文：UTF8字节数1，字符个数1，视觉宽度1             |
+ * | `"中"`      | 3    | 1         | 2            | 中文：UTF8字节数3，字符个数1，视觉宽度2             |
+ * | `"😂"`     | 4    | 1         | 2            | Emoji：UTF8字节数4，字符个数1，视觉宽度2          |
+ * | `"[img]"` | 5    | 1         | 2            | ImageSpan：描述文本的UTF8字节数5，字符个数1，视觉宽度2 |
+ * | `"\u200B"` | 3    | 1         | 1            | 不可见字符：UTF8字节数3，字符个数1，视觉宽度按1计算       |
+ *
+ * > 注：VISUAL_WIDTH模式下，未识别出来的不可见字符可能会被统计为2
+ */
+enum class LengthLimitType(val value: Int) {
+    /** 限制输入的长度按字节计算 */
+    BYTE(0),
+    /** 限制输入的长度按字符计算 */
+    CHARACTER(1),
+    /** 限制输入的长度按视觉宽度计算 */
+    VISUAL_WIDTH(2)
+}

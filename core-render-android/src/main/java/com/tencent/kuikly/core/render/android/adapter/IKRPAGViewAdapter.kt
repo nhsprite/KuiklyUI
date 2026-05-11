@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,7 +17,7 @@ package com.tencent.kuikly.core.render.android.adapter
 
 import android.content.Context
 import android.view.View
-import com.tencent.kuikly.core.render.android.expand.component.pag.KRPAGView
+import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 
 /**
  * Created by kam on 2023/5/17.
@@ -48,9 +48,17 @@ interface IPAGView {
      */
     fun setPAGViewRepeatCount(count: Int)
 
+    /**
+     * 设置PAG缩放模式
+     * @param scaleMode 缩放模式 (0: NONE, 1: STRETCH, 2: LETTER_BOX, 3: ZOOM)
+     */
+    fun setPAGViewScaleMode(scaleMode: Int)
+
     fun playPAGView()
 
     fun stopPAGView()
+
+    fun setProgressPAGView(value: Double) {}
 
     fun addPAGViewListener(listener: IPAGViewListener)
 
@@ -77,6 +85,17 @@ interface IPAGView {
      * @return 如果处理了该属性就返回true，否则false
      */
     fun setKRProp(propKey: String, propValue: Any): Boolean {
+        return false
+    }
+
+    /**
+     * kuikly侧调用方法，一般用于业务扩展使用
+     * @param method 方法名
+     * @param params 参数
+     * @param callback 回调
+     * @return 如果处理了该方法就返回true，否则false
+     */
+    fun call(method: String, params: String?, callback: KuiklyRenderCallback?): Boolean {
         return false
     }
 

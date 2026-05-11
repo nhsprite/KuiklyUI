@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,7 +14,6 @@
  */
 
 package com.tencent.kuikly.core.base
-
 
 object ViewConst {
     const val TYPE = "type"
@@ -46,6 +45,15 @@ object ViewConst {
     const val TYPE_TEXT_AREA = "KRTextAreaView"
     const val TYPE_SCROLL_CONTENT_VIEW = "KRScrollContentView"
     const val TYPE_BLUR_VIEW = "KRBlurView"
+    
+    // iOS Native Components
+    const val TYPE_IOS_LIQUID_GLASS_VIEW = "KRLiquidGlassView"
+    const val TYPE_IOS_GLASS_EFFECT_CONTAINER_VIEW = "KRGlassContainerView"
+    const val TYPE_IOS_SWITCH = "KRiOSGlassSwitch"
+    const val TYPE_IOS_SLIDER = "KRiOSGlassSlider"
+    const val TYPE_IOS_TABBAR = "KRTabbarView"
+    const val TYPE_IOS_SEGMENTED_CONTROL = "KRSegmentedControl"
+    
     const val TYPE_PAG_VIEW = "KRPAGView"
     const val TYPE_APNG_VIEW = "KRAPNGView"
     const val TYPE_VIDEO_VIEW = "KRVideoView"

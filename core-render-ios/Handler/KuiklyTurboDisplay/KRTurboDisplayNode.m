@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -42,6 +42,7 @@
     if (self = [super init]) {
         _tag = tag;
         _viewName = viewName;
+        _nodePersistentChangedEnable = YES;
     }
     return self;
 }
@@ -114,7 +115,7 @@
 
 - (void)setFrame:(CGRect)frame {
     assert([NSThread isMainThread]);
-    [self setPropWithKey:FRAME_KEY propValue:[NSValue valueWithCGRect:frame] propType:KRTurboDisplayPropTypeFrame];
+    [self setPropWithKey:FRAME_KEY propValue:@(frame) propType:KRTurboDisplayPropTypeFrame];
 }
 
 - (void)setShadow:(KRTurboDisplayShadow *)shadow {
@@ -245,6 +246,7 @@
     }
     return _callMethods;
 }
+
 
 - (BOOL)hasChild {
     return _children.count > 0;

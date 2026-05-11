@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 #import <Foundation/Foundation.h>
-#import <TDFCommon/TDFModuleProtocol.h>
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
+#import "TDFModuleProtocol.h"
 #import "KuiklyRenderContextProtocol.h"
 #import "KuiklyRenderViewExportProtocol.h"
 
@@ -23,6 +23,7 @@ extern NSString *_Nonnull const kKuiklyFatalExceptionNotification;
 NS_ASSUME_NONNULL_BEGIN
 
 @class KuiklyContextParam;
+@class KRTurboDisplayConfig;
 @protocol KuiklyRenderCoreDelegate;
 @protocol KuiklyRenderLayerProtocol;
 
@@ -117,6 +118,11 @@ NS_ASSUME_NONNULL_BEGIN
  * @return 返回该页面的TurboDisplayKey（一般可为PageName，若为nil，则为关闭TurboDisplay渲染模式）
  */
 - (NSString * _Nullable)turboDisplayKey;
+
+/*
+ * @brief 返回 TurboDisplay 页面级配置（新增）
+ */
+- (KRTurboDisplayConfig * _Nullable)turboDisplayConfig;
 
 @end
 

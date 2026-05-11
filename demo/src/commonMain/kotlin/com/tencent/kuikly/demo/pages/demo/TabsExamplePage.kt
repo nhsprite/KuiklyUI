@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,28 +17,31 @@ package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.annotations.Page
 import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewRef
 import com.tencent.kuikly.core.directives.vfor
-import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
-import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.views.PageList
+import com.tencent.kuikly.core.views.PageListView
+import com.tencent.kuikly.core.views.ScrollParams
+import com.tencent.kuikly.core.views.TabItem
+import com.tencent.kuikly.core.views.Tabs
+import com.tencent.kuikly.core.views.Text
+import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
 import kotlin.random.Random
 
-
-internal class TabItemData {
-    var tabTitle by observable("")
-    var pageBgColor by observable(Color.WHITE)
-    var index by observable(0)
+internal class TabItemData(scope: PagerScope) {
+    var tabTitle by scope.observable("")
+    var pageBgColor by scope.observable(Color.WHITE)
+    var index by scope.observable(0)
 }
-
 
 @Page("TabsExamplePage")
 internal class TabsExamplePage : BasePager() {
-
 
     private var pageListRef : ViewRef<PageListView<*, *>>? = null
     private var scrollParams : ScrollParams? by observable(null)
@@ -50,7 +53,7 @@ internal class TabsExamplePage : BasePager() {
     override fun created() {
         super.created()
         for (i in 0..20) {
-            val tabItemData = TabItemData().apply {
+            val tabItemData = TabItemData(this).apply {
                 tabTitle = "tabName$i"
                 pageBgColor = generateRandomColor()
                 index = i

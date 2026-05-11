@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -55,10 +55,10 @@ if ([self respondsToSelector:selector]) { \
 }
 
 #define KR_STRONG_SELF_RETURN_IF_NIL \
-if (!weakSelf) { \
-    return; \
-} \
 __strong typeof(&*weakSelf) strongSelf = weakSelf; \
+if (!strongSelf) { \
+return; \
+} \
 
 #define KR_WEAK_SELF __weak typeof(&*self) weakSelf = self;
 

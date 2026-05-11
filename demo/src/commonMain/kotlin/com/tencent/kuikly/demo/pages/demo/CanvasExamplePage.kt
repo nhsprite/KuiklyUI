@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,19 +16,26 @@
 package com.tencent.kuiklydemo.pages.demo.DeclarativeDemo
 
 import com.tencent.kuikly.core.annotations.Page
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Attr
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ComposeAttr
+import com.tencent.kuikly.core.base.ComposeEvent
+import com.tencent.kuikly.core.base.ComposeView
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.layout.Frame
-import com.tencent.kuikly.core.reactive.ReactiveObserver
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Canvas
 import com.tencent.kuikly.core.views.CanvasContext
-import com.tencent.kuikly.core.views.CanvasView
-import kotlin.math.PI
-import kotlin.math.cos
-import com.tencent.kuikly.core.reactive.handler.*
 import com.tencent.kuikly.core.views.List
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
+import kotlin.math.PI
+import kotlin.math.cos
 
+fun Attr.needCustomWrapper(value: Boolean) {
+    "needCustomWrapper" with value
+}
 
 @Page("CanvasExamplePage")
 internal class CanvasExamplePage : BasePager() {
@@ -44,6 +51,7 @@ internal class CanvasExamplePage : BasePager() {
             List {
                 attr {
                     flex(1f)
+                    needCustomWrapper(false)
                 }
                 CouponBackground {
                     attr {
@@ -89,7 +97,6 @@ internal class CanvasExamplePage : BasePager() {
                     }
                 }
             }
-
         }
     }
 }
@@ -165,7 +172,6 @@ internal class CouponBackgroundView : ComposeView<CouponBackgroundAttr, ComposeE
 
     }
 
-
     private fun renderBackground(context: CanvasContext, width: Float, height: Float) {
         val rightWidth = attr.rightAreaWidth
         val lineHeight = 0.5f
@@ -177,7 +183,6 @@ internal class CouponBackgroundView : ComposeView<CouponBackgroundAttr, ComposeE
         val cornerRadius = 4f // 边框角度
         context.lineWidth(lineHeight)
         context.strokeStyle(borderColor())
-
 
         context.moveTo(x, y + cornerRadius)
 
@@ -251,7 +256,6 @@ internal class CouponBackgroundView : ComposeView<CouponBackgroundAttr, ComposeE
         //
         context.arc(x + cornerRadius, y, cornerRadius, PI.toFloat(), PI.toFloat() / 2, true)
 
-
         x = width - rightWidth - bigCornerRadius
         y = height - edge
         context.lineTo(x, y)
@@ -322,7 +326,6 @@ internal class CouponBackgroundView : ComposeView<CouponBackgroundAttr, ComposeE
         context.moveTo(dashLineX, dashLineY)
         context.lineTo(dashLineX, dashLineY + 2f)
         context.stroke()
-
 
     }
 

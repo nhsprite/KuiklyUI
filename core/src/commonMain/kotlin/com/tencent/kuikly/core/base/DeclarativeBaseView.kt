@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 package com.tencent.kuikly.core.base
 
 import com.tencent.kuikly.core.base.event.Event
+import com.tencent.kuikly.core.collection.fastHashMapOf
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.layout.Frame
 import com.tencent.kuikly.core.layout.MutableFrame
@@ -52,6 +53,9 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
        }
 
     internal var absoluteFlexNode : Boolean = false
+
+    // 渲染属性对象,延迟初始化
+    public var renderProperties: Any? = null
 
     override fun <T : DeclarativeBaseView<*, *>> T.ref(ref: (viewRef: ViewRef<T>) -> Unit) {
         ref(ViewRef<T>(pagerId, nativeRef))
@@ -204,11 +208,11 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
         }
     }
 
-    private fun getAnimateCompletionMap(): HashMap<String,  (Boolean)->Unit> {
+    private fun getAnimateCompletionMap(): MutableMap<String,  (Boolean)->Unit> {
         val animateCompletionMapKey = "animateCompletionMapKey"
-        var animateCompletionMap = extProps[animateCompletionMapKey] as? HashMap<String,  (Boolean)->Unit>
+        var animateCompletionMap = extProps[animateCompletionMapKey] as? MutableMap<String,  (Boolean)->Unit>
         if (animateCompletionMap == null) {
-            animateCompletionMap = hashMapOf<String,  ((Boolean)->Unit)>()
+            animateCompletionMap = fastHashMapOf<String,  ((Boolean)->Unit)>()
             extProps[animateCompletionMapKey] = animateCompletionMap
         }
         return animateCompletionMap
@@ -228,6 +232,10 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
         event.onViewLayoutFrameDidChanged(this)
     }
 
+    open fun didSetFrameToRenderView() {
+
+    }
+
     open fun setFrameToRenderView(frame: Frame) {
         // 换算相对到真实父亲的坐标系
         renderView?.also {
@@ -237,9 +245,10 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
                 attr.setProp(Attr.StyleConst.ANIMATION, toString())
             }
 
-            // 设置frame到renderview
+            // 设置frame到renderView
             val rFrame = frameInParentRenderComponentCoordinate(frame)
             it.setFrame(rFrame.x, rFrame.y, rFrame.width, rFrame.height)
+            didSetFrameToRenderView()
             event.onRelativeCoordinatesDidChanged(this)
 
             // frame设置后，清楚animation对象
@@ -249,7 +258,6 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
         }
     }
 
-
     private fun internalCreateEvent(): E {
         val event = createEvent()
         event.init(pagerId,nativeRef)
@@ -257,8 +265,28 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
     }
 
     /**
+     * 无障碍朗读文本
+     *
+     * @param message 朗读内容
+     */
+    fun accessibilityAnnounce(message: String) {
+        performTaskWhenRenderViewDidLoad {
+            renderView?.callMethod("accessibilityAnnounce", message, null)
+        }
+    }
+
+    /**
+     * 无障碍焦点触发，如果包含无障碍描述会触发朗读
+     */
+    fun accessibilityFocus() {
+        performTaskWhenRenderViewDidLoad {
+            renderView?.callMethod("accessibilityFocus", null, null)
+        }
+    }
+
+    /**
      * 获取View截图
-     * 注：暂时仅支持鸿蒙平台（1.1.71版本）
+     * 注：支持鸿蒙平台（1.1.71版本）、iOS平台、Android平台
      *
      * @param type 截图类型
      * @param sampleSize 采样率，取值大于或等于1，默认1
@@ -279,11 +307,10 @@ abstract class DeclarativeBaseView<A : Attr, E : Event> : AbstractBaseView<A, E>
 }
 
 class ViewRef<T : DeclarativeBaseView<*, *>>(
-    private val pagerId: String,
-    private val nativeRef: Int
+    val pagerId: String,
+    val nativeRef: Int
 ) {
     val view: T?
         get() = PagerManager.getPager(pagerId)
             .getViewWithNativeRef(nativeRef) as? T
 }
-

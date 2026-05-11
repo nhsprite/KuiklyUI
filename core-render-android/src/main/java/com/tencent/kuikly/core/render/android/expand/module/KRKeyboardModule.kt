@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,15 +18,17 @@ package com.tencent.kuikly.core.render.android.expand.module
 import android.app.Activity
 import android.content.Context
 import android.graphics.Rect
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.PopupWindow
-import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderLog
+import com.tencent.kuikly.core.render.android.css.ktx.isAfterAndroid11
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderBaseModule
 
 /**
@@ -38,30 +40,44 @@ class KRKeyboardModule : KuiklyRenderBaseModule() {
         const val MODULE_NAME = "KRKeyboardModule"
     }
 
-    private var keyboardStatusWatcher: KeyboardStatusWatcher? = null
+    private var keyboardWatcher: Any? = null
 
     fun addListener(listener: KeyboardStatusListener) {
-        if (keyboardStatusWatcher == null) {
-            activity?.let {
-                keyboardStatusWatcher = KeyboardStatusWatcher(it)
+        if (keyboardWatcher == null) {
+            activity?.let { activity ->
+                keyboardWatcher = if (isAfterAndroid11) {
+                    Android11PlusKeyboardWatcher(activity)
+                } else {
+                    KeyboardStatusWatcher(activity)
+                }
             }
         }
-        keyboardStatusWatcher?.addListener(listener)
+        
+        when (val watcher = keyboardWatcher) {
+            is KeyboardStatusWatcher -> watcher.addListener(listener)
+            is Android11PlusKeyboardWatcher -> watcher.addListener(listener)
+        }
     }
 
     fun removeListener(listener: KeyboardStatusListener) {
-        keyboardStatusWatcher?.removeListener(listener)
+        when (val watcher = keyboardWatcher) {
+            is KeyboardStatusWatcher -> watcher.removeListener(listener)
+            is Android11PlusKeyboardWatcher -> watcher.removeListener(listener)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        keyboardStatusWatcher?.destroy()
+        when (val watcher = keyboardWatcher) {
+            is KeyboardStatusWatcher -> watcher.destroy()
+            is Android11PlusKeyboardWatcher -> watcher.destroy()
+        }
     }
 
 }
 
 /**
- * 键盘状态监听，通过往 Activity 添加一个 popupView 监听键盘状态变化
+ * Android 11 以下键盘状态监听，通过往 Activity 添加一个 popupView 监听键盘状态变化
  */
 class KeyboardStatusWatcher(private val activity: Activity) : PopupWindow(activity),
     ViewTreeObserver.OnGlobalLayoutListener {
@@ -77,6 +93,7 @@ class KeyboardStatusWatcher(private val activity: Activity) : PopupWindow(activi
 
     private var lastVisibleHeight = -1
     private var lastVisibleBottom = -1
+    private var lastScreenHeight = -1
     private var listeners = ArrayList<KeyboardStatusListener>()
 
     init {
@@ -102,6 +119,7 @@ class KeyboardStatusWatcher(private val activity: Activity) : PopupWindow(activi
         val rect = Rect()
         popupView.getWindowVisibleDisplayFrame(rect)
         val visibleHeight = rect.bottom - rect.top
+        
         // 可见区域不变，不重复通知
         if (visibleHeight == lastVisibleHeight) {
             return
@@ -109,6 +127,13 @@ class KeyboardStatusWatcher(private val activity: Activity) : PopupWindow(activi
         lastVisibleHeight = visibleHeight
 
         val screenHeight = getScreenHeight()
+        if (lastScreenHeight != screenHeight) {
+            // 如果屏幕旋转，高度存在变化，那么这个lastVisibleBottom需要重置且采用 decorView 再次计算，
+            // 否则会出现屏幕的 Bottom 比 键盘的 Bottom 要小的问题，会导致出现负值导致键盘高度一直为 0
+            lastVisibleBottom = -1
+        }
+        lastScreenHeight = screenHeight
+
         // 可视区域占屏幕高度大于 80%，则认为键盘关闭，记录首次关闭时键盘底部的高度
         if (lastVisibleBottom < 0 && visibleHeight > screenHeight * 0.8) {
             lastVisibleBottom = rect.bottom
@@ -157,18 +182,76 @@ class KeyboardStatusWatcher(private val activity: Activity) : PopupWindow(activi
     }
 
     private fun notifyKeyboardHeightChanged(height: Int) {
-        listeners.forEach {
-            it.onHeightChanged(height)
+        val list = listeners.toList()
+        for (listener in list) {
+            listener.onHeightChanged(height)
         }
     }
 
     fun destroy() {
-        // 销毁 popupView，避免内存泄露
-        dismiss()
+        if (isShowing) {
+            // 销毁 popupView，避免内存泄露
+            dismiss()
+        }
         popupView.viewTreeObserver.removeOnGlobalLayoutListener(this)
         listeners.clear()
     }
 
+}
+
+/**
+ * Android 11+ 键盘状态监听器
+ */
+class Android11PlusKeyboardWatcher(private val activity: Activity) : ViewTreeObserver.OnGlobalLayoutListener {
+    
+    private var lastKeyboardHeight = 0
+    private var listeners = ArrayList<KeyboardStatusListener>()
+
+    init {
+        val parentView = activity.findViewById<View>(android.R.id.content)
+        parentView?.post {
+            parentView.viewTreeObserver.addOnGlobalLayoutListener(this)
+        }
+    }
+
+    override fun onGlobalLayout() {
+        val rootView: View = activity.findViewById(android.R.id.content)
+        val newKeyboardHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets = rootView.rootWindowInsets
+            val imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom
+            val navHeight = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+            // 只有当键盘弹出时（imeHeight > 0），才尝试减去导航栏高度
+            if (imeHeight > 0) (imeHeight - navHeight).coerceAtLeast(0) else 0
+        } else {
+            0
+        }
+
+        if (newKeyboardHeight != lastKeyboardHeight) {
+            notifyKeyboardHeightChanged(newKeyboardHeight)
+            lastKeyboardHeight = newKeyboardHeight
+        }
+    }
+
+    fun addListener(listener: KeyboardStatusListener) {
+        listeners.add(listener)
+    }
+
+    fun removeListener(listener: KeyboardStatusListener) {
+        listeners.remove(listener)
+    }
+
+    private fun notifyKeyboardHeightChanged(height: Int) {
+        val list = listeners.toList()
+        for (listener in list) {
+            listener.onHeightChanged(height)
+        }
+    }
+
+    fun destroy() {
+        val parentView = activity.findViewById<View>(android.R.id.content)
+        parentView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+        listeners.clear()
+    }
 }
 
 /**

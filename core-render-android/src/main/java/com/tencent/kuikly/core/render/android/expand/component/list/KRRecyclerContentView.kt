@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package com.tencent.kuikly.core.render.android.expand.component.list
 
 import android.content.Context
 import android.view.View
+import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.expand.component.KRView
 
 class KRRecyclerContentView(context: Context) : KRView(context) {
@@ -37,6 +38,13 @@ class KRRecyclerContentView(context: Context) : KRView(context) {
         }
 
     private val addChildLazyTasks = mutableListOf<View>()
+
+    override fun setProp(propKey: String, propValue: Any): Boolean {
+        if (propKey == KRCssConst.FRAME) {
+            (parent as? KRRecyclerView)?.automaticAdjustContentOffset()
+        }
+        return super.setProp(propKey, propValue)
+    }
 
     override fun addView(child: View, index: Int) {
         super.addView(child, index)

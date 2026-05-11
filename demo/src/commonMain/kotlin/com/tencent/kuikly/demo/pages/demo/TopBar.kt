@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,17 +13,15 @@
  * limitations under the License.
  */
 
-package com.tencent.kuikly.demo.pages
+package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.base.*
 import com.tencent.kuikly.core.module.RouterModule
 import com.tencent.kuikly.core.views.*
-import com.tencent.kuikly.demo.pages.base.Utils
-import com.tencent.kuikly.core.reactive.handler.*
+
 /**
  * Created by kam on 2022/6/22.
  */
-
 internal class TopBar : ComposeView<ComposeAttr, ComposeEvent>() {
 
     lateinit var selfRef : ViewRef<ViewContainer<*, *>>
@@ -72,7 +70,6 @@ internal class TopBar : ComposeView<ComposeAttr, ComposeEvent>() {
                     }
                 }
             }
-
 
             RichText {
                 Span {

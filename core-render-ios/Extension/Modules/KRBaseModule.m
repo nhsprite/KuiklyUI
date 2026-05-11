@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -24,6 +24,7 @@ NSString *const KR_CALLBACK_KEY = @"callback";
 @implementation KRBaseModule
 
 @synthesize hr_rootView;
+@synthesize hr_contextParam;
 #pragma mark - KuiklyRenderModuleExportProtocol
 
 - (id _Nullable)hrv_callWithMethod:(NSString *)method params:(id _Nullable)params callback:(KuiklyRenderCallback)callback {

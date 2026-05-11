@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import com.tencent.kuikly.core.base.ComposeAttr
 import com.tencent.kuikly.core.base.ComposeEvent
 import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.RichText
 import com.tencent.kuikly.core.views.Span
 
@@ -122,7 +123,7 @@ internal class ParsedTextView: ComposeView<ParsedTextViewAttr, ParsedTextViewEve
 internal class ParsedTextViewAttr : ComposeAttr() {
     var text: String = ""
     var parse = mutableListOf<MatchText>()
-    var color = Color.BLACK
+    var color by observable(Color.BLACK)
     var fontSize = 15.0f
 
     fun text(text: String): ParsedTextViewAttr {

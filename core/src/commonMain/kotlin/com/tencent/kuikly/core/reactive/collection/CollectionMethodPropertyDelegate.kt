@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,6 +23,7 @@ class CollectionMethodPropertyDelegate<T>(
 ) : IObservableCollection {
 
     private val collectionOperations = fastArrayListOf<CollectionOperation>()
+    private var operationSeq = 0
 
     override val collectionOperation: List<CollectionOperation>
         get() = this.collectionOperations
@@ -32,7 +33,6 @@ class CollectionMethodPropertyDelegate<T>(
         set(value) {
             handler = value
         }
-
 
     private fun notifyElementChanged() {
         handler?.onElementChange()
@@ -139,7 +139,8 @@ class CollectionMethodPropertyDelegate<T>(
         collectionOperations.add(
             CollectionOperation(
                 CollectionOperation.OPERATION_TYPE_ADD,
-                index, count
+                index, count,
+                operationSeq++
             )
         )
     }
@@ -148,7 +149,8 @@ class CollectionMethodPropertyDelegate<T>(
         collectionOperations.add(
             CollectionOperation(
                 CollectionOperation.OPERATION_TYPE_REMOVE,
-                index, count
+                index, count,
+                operationSeq++
             )
         )
     }

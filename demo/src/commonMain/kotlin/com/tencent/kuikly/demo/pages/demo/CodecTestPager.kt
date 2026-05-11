@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,6 +32,7 @@ internal class CodecTestPager : BasePager() {
     private var base64Encode by observable("")
     private var base64Decode by observable("")
     private var md5 by observable("")
+    private var md5With32 by observable("")
     private var sha256 by observable("")
 
     override fun body(): ViewBuilder {
@@ -69,12 +70,17 @@ internal class CodecTestPager : BasePager() {
                 }
                 Text {
                     attr {
-                        text("md5" + ctx.md5)
+                        text("md5(16位): " + ctx.md5)
                     }
                 }
                 Text {
                     attr {
-                        text("sha256" + ctx.sha256)
+                        text("md5With32(32位): " + ctx.md5With32)
+                    }
+                }
+                Text {
+                    attr {
+                        text("sha256: " + ctx.sha256)
                     }
                 }
             }
@@ -91,6 +97,7 @@ internal class CodecTestPager : BasePager() {
         base64Encode = acquireModule<CodecModule>(CodecModule.MODULE_NAME).base64Encode(string)
         base64Decode = acquireModule<CodecModule>(CodecModule.MODULE_NAME).base64Decode(base64Encode)
         md5 = acquireModule<CodecModule>(CodecModule.MODULE_NAME).md5(string)
+        md5With32 = acquireModule<CodecModule>(CodecModule.MODULE_NAME).md5With32(string)
 
         sha256 = acquireModule<CodecModule>(CodecModule.MODULE_NAME).sha256(string)
 

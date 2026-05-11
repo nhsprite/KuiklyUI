@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -24,6 +24,7 @@
 
 @implementation KRGradientRichTextView {
     KRRichTextView *_contentTextView;
+    BOOL _isGradientMode;
 }
 @synthesize hr_rootView;
 #pragma mark - init
@@ -31,7 +32,10 @@
 - (instancetype)initWithFrame:(CGRect)frame {
     if (self = [super initWithFrame:frame]) {
         _contentTextView = [[KRRichTextView alloc] initWithFrame:self.bounds];
+        _isGradientMode = NO;
+#if !TARGET_OS_OSX // [macOS]
         [self addSubview:_contentTextView];
+#endif
     }
     return self;
 }
@@ -54,7 +58,60 @@
  */
 - (void)hrv_prepareForeReuse {
     
-    [_contentTextView hrv_prepareForeReuse];
+    // 0. 强引用保活 _contentTextView 和及其 layer
+    // 提前强引用保活：渐变模式下的复用清除 mask置nil 会release layer，
+    // 导致_contentTextView被释放。通过局部变量强引用，防止提前释放。
+    KRRichTextView *contentTextView = _contentTextView;
+    if (!contentTextView) {
+        return;
+    }
+    CALayer *contentLayer = contentTextView.layer;
+
+    // 1. 移除渐变 layer，解除 mask
+    for (CALayer *subLayer in [self.layer.sublayers copy]) {
+        if ([subLayer isKindOfClass:[CAGradientLayer class]] && subLayer.mask == contentTextView.layer) {
+            subLayer.mask = nil;
+            [subLayer removeFromSuperlayer];
+        }
+    }
+
+    // 2. 重置 _contentTextView.layer 的 transform / anchorPoint / position
+    if (!CATransform3DEqualToTransform(contentLayer.transform, CATransform3DIdentity)) {
+        contentLayer.transform = CATransform3DIdentity;
+    }
+#if TARGET_OS_OSX // [macOS
+    // macOS 默认 anchorPoint=(0,0)，必须恢复，否则布局偏移导致文字显示不全
+    if (!CGPointEqualToPoint(contentLayer.anchorPoint, CGPointMake(0.0, 0.0))) {
+        contentLayer.anchorPoint = CGPointMake(0.0, 0.0);
+    }
+    contentLayer.position = CGPointMake(0, 0);
+#else // macOS]
+    // iOS 默认 anchorPoint=(0.5,0.5)
+    if (!CGPointEqualToPoint(contentLayer.anchorPoint, CGPointMake(0.5, 0.5))) {
+        contentLayer.anchorPoint = CGPointMake(0.5, 0.5);
+    }
+    contentLayer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+#endif
+
+    // 3. 恢复 _contentTextView 的 subview 层级
+#if TARGET_OS_OSX // [macOS
+    if (_isGradientMode || contentTextView.superview != self) {
+        [contentTextView removeFromSuperview];
+        [self addSubview:contentTextView];
+    }
+#else // macOS]
+    if (contentTextView.layer.superlayer != self.layer) {
+        [contentTextView removeFromSuperview];
+        [self addSubview:contentTextView];
+    }
+#endif // [macOS]
+
+    // 4. 重置状态
+    _isGradientMode = NO;
+    self.css_backgroundImage = nil;
+
+    // 5. 转发给 _contentTextView 做其自身的复用重置
+    [contentTextView hrv_prepareForeReuse];
 }
 /*
  * @brief 创建shdow对象(可选实现)
@@ -91,14 +148,52 @@
 - (void)p_setTextGradient {
     CAGradientLayer *gradientLayer = nil;
     for (CALayer *subLayer in self.layer.sublayers) {
-        if ([subLayer isKindOfClass:[CAGradientLayer class]]) {
+        if ([subLayer isKindOfClass:[CAGradientLayer class]] && subLayer != _contentTextView.layer) {
             gradientLayer = (CAGradientLayer *)subLayer;
         }
     }
     if (gradientLayer) {
-        gradientLayer.mask = _contentTextView.layer;
-    } else {
+        _isGradientMode = YES;
+
+#if TARGET_OS_OSX // macOS
+        // macOS 需要先强制渲染一次，才能将 layer 用作 mask
+        [_contentTextView setNeedsDisplay:YES];
+        [_contentTextView displayIfNeeded];
         
+        // 先将 _contentTextView 从 superview 移除，避免 view/layer 层级不一致
+        if (_contentTextView.superview == self) {
+            [_contentTextView removeFromSuperview];
+        }
+
+        CALayer *maskLayer = _contentTextView.layer;
+        // 重置为 Identity 再设置 Y 轴翻转（macOS 坐标系原点在左下角）
+        maskLayer.transform = CATransform3DIdentity;
+        maskLayer.transform = CATransform3DMakeScale(1.0, -1.0, 1.0);
+        maskLayer.anchorPoint = CGPointMake(0.5, 0.5);
+        maskLayer.position = CGPointMake(CGRectGetMidX(maskLayer.bounds), CGRectGetMidY(maskLayer.bounds));
+
+        gradientLayer.mask = maskLayer;
+#else // macOS]
+        gradientLayer.mask = _contentTextView.layer;
+#endif // [macOS]
+    } else {
+        _isGradientMode = NO;
+
+#if TARGET_OS_OSX // [macOS
+        // 非渐变模式：确保 _contentTextView 作为 subview 存在
+        if (_contentTextView.superview != self) {
+            [self addSubview:_contentTextView];
+        }
+        // 防止从渐变模式切换过来时残留翻转 transform
+        if (!CATransform3DEqualToTransform(_contentTextView.layer.transform, CATransform3DIdentity)) {
+            _contentTextView.layer.transform = CATransform3DIdentity;
+        }
+        // 恢复 anchorPoint 到 macOS 默认值 (0,0)，否则布局偏移导致文字显示不全
+        if (!CGPointEqualToPoint(_contentTextView.layer.anchorPoint, CGPointMake(0.0, 0.0))) {
+            _contentTextView.layer.anchorPoint = CGPointMake(0.0, 0.0);
+            _contentTextView.layer.position = CGPointMake(0, 0);
+        }
+#endif // macOS]
     }
 }
 

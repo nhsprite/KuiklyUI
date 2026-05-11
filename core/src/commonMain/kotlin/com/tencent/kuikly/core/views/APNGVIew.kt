@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -52,9 +52,7 @@ class APNGVView : DeclarativeBaseView<APNGAttr, APNGEvent>() {
         }
     }
 
-
 }
-
 
 class APNGAttr : Attr() {
     // 设置动画资源（support cdn url or local filePath）
@@ -97,5 +95,3 @@ object APNGConst {
     const val REPEAT_COUNT = "repeatCount"
     const val AUTO_PLAY = "autoPlay"
 }
-
-

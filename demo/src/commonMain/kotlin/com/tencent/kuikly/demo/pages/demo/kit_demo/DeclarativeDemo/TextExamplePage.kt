@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -86,12 +86,22 @@ internal class TextExampleFontSize: ComposeView<ComposeAttr, ComposeEvent>() {
                 }
             }
             Text {
+                event {
+                    click {
+                        KLog.i("TextExamplePage", "fontSize(24)     click")
+                    }
+                }
                 attr {
                     fontSize(24f)
                     text("attr { fontSize(24) }")
                 }
             }
             Text {
+                event {
+                    click {
+                        KLog.i("TextExamplePage", "fontSize(28)     click")
+                    }
+                }
                 attr {
                     fontSize(28f)
                     text("attr { fontSize(28) }")
@@ -299,7 +309,7 @@ internal class TextExampleTextStroke: ComposeView<ComposeAttr, ComposeEvent>() {
                 attr {
                     text("black text stroke")
                     fontSize(18f)
-                    color(Color.WHITE)
+                    color(Color.GRAY)
                     textStroke(Color.BLACK, 3f)
                 }
             }
@@ -308,9 +318,9 @@ internal class TextExampleTextStroke: ComposeView<ComposeAttr, ComposeEvent>() {
                     marginTop(20f)
                     text("blue text shadow")
                     fontSize(28f)
-                    color(Color.WHITE)
+                    fontWeightBold()
+                    color(Color.GRAY)
                     textStroke(Color.BLUE, 5f)
-                 //   strokeWidth(5f)
                 }
             }
         }
@@ -513,6 +523,10 @@ internal class TextExampleRichText: ComposeView<ComposeAttr, ComposeEvent>() {
                 }
             }
             RichText {
+                attr {
+                    lines(3)
+                    textOverFlowClip()
+                }
                 Span {
                     fontSize(18f).color(Color(0xFFEE3333)).text("富文本")
                 }
@@ -548,10 +562,12 @@ internal class TextExampleRichText: ComposeView<ComposeAttr, ComposeEvent>() {
                     fontSize(18f).textDecorationUnderLine().text("风格。")
                 }
                 Span {
-                    fontSize(18f).text("嵌入图片1 ")
+                    fontSize(18f).text("嵌入图片1(margin 20) ")
                 }
                 ImageSpan {
                     size(40f, 40f)
+                    marginLeft(20f)
+                    marginRight(20f)
                     src("https://vfiles.gtimg.cn/wuji_dashboard/xy/starter/59ef6918.gif")
                     borderRadius(5f)
                 }
@@ -563,7 +579,14 @@ internal class TextExampleRichText: ComposeView<ComposeAttr, ComposeEvent>() {
                     src("https://vfiles.gtimg.cn/wuji_dashboard/xy/starter/59ef6918.gif")
                     borderRadius(5f)
                 }
-
+                Span {
+                    fontSize(18f).text("第三行将截段成...区域不足以显示图片3")
+                }
+                ImageSpan {
+                    size(60f, 60f)
+                    src("https://vfiles.gtimg.cn/wuji_dashboard/xy/starter/59ef6918.gif")
+                    borderRadius(5f)
+                }
             }
             RichText {
                 attr {
@@ -632,6 +655,138 @@ internal class TextExampleRichText: ComposeView<ComposeAttr, ComposeEvent>() {
                     fontSize(14f)
                 }
             }
+            RichText {
+                attr {
+                    marginTop(10f)
+                    backgroundColor(BG_A)
+                    fontSize(SIZE_M)
+                }
+                ImageSpan {
+                    size(SIZE_L, SIZE_S)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                Span {
+                    fontSize(SIZE_L)
+                    text("\n图片加换行")
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_B)
+                    fontSize(SIZE_M)
+                }
+                Span {
+                    fontSize(SIZE_L)
+                    text("\n开头换行")
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_A)
+                    fontSize(SIZE_M)
+                }
+                Span {
+                    fontSize(SIZE_S)
+                    text("小字")
+                }
+                Span {
+                    fontSize(SIZE_L)
+                    text("\n小字加换行")
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_B)
+                }
+                ImageSpan {
+                    size(SIZE_XL, SIZE_XL)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                ImageSpan {
+                    size(SIZE_L, SIZE_L)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                Span {
+                    fontSize(SIZE_M)
+                    text("图文")
+                }
+                Span {
+                    fontSize(SIZE_S)
+                    text("递减")
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_A)
+                }
+                Span {
+                    fontSize(SIZE_XL)
+                    text("文图")
+                }
+                Span {
+                    fontSize(SIZE_L)
+                    text("递减")
+                }
+                ImageSpan {
+                    size(SIZE_M, SIZE_M)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                ImageSpan {
+                    size(SIZE_S, SIZE_S)
+                    src(LOGO)
+                    resizeStretch()
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_B)
+                }
+                ImageSpan {
+                    size(SIZE_S, SIZE_S)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                ImageSpan {
+                    size(SIZE_M, SIZE_M)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                Span {
+                    fontSize(SIZE_L)
+                    text("图文")
+                }
+                Span {
+                    fontSize(SIZE_XL)
+                    text("递增")
+                }
+            }
+            RichText {
+                attr {
+                    backgroundColor(BG_A)
+                }
+                Span {
+                    fontSize(SIZE_S)
+                    text("文图")
+                }
+                Span {
+                    fontSize(SIZE_M)
+                    text("递增")
+                }
+                ImageSpan {
+                    size(SIZE_L, SIZE_L)
+                    src(LOGO)
+                    resizeStretch()
+                }
+                ImageSpan {
+                    size(SIZE_XL, SIZE_XL)
+                    src(LOGO)
+                    resizeStretch()
+                }
+            }
         }
     }
 
@@ -655,6 +810,13 @@ internal class TextExampleRichText: ComposeView<ComposeAttr, ComposeEvent>() {
                     "处理您的相关必要个人信息，基于地理位置信息等提供拓展功能收集的个人信息将在您使用具体功能时单独征求您的同意。"
         private const val DIALOG_INFO_PART6 = "、"
 
+        private const val LOGO = "https://wfiles.gtimg.cn/wuji_dashboard/xy/starter/be8ff284.png"
+        private const val SIZE_S = 10f
+        private const val SIZE_M = 16f
+        private const val SIZE_L = 25.6f
+        private const val SIZE_XL = 40.96f
+        private val BG_A = Color.GRAY
+        private val BG_B = Color(0xFFEEEEEE)
     }
 }
 
@@ -746,6 +908,254 @@ internal fun ViewContainer<*, *>.TextExampleLineHeight(init: TextExampleLineHeig
     addChild(TextExampleLineHeight(), init)
 }
 
+internal class TextExampleLetterSpacing: ComposeView<ComposeAttr, ComposeEvent>() {
+    override fun body(): ViewBuilder {
+        return {
+            attr {
+                flexDirectionColumn()
+                justifyContentFlexStart()
+                padding(all = 16f)
+            }
+            Text {
+                attr {
+                    text("letterSpacing(0f)  Hello Kuikly 你好世界")
+                    fontSize(16f)
+                    letterSpacing(0f)
+                    backgroundColor(0xFFEEEEEE)
+                    marginBottom(5f)
+                }
+            }
+            Text {
+                attr {
+                    text("letterSpacing(2f)  Hello Kuikly 你好世界")
+                    fontSize(16f)
+                    letterSpacing(2f)
+                    backgroundColor(0xFFEEEEEE)
+                    marginBottom(5f)
+                }
+            }
+            Text {
+                attr {
+                    text("letterSpacing(5f)  Hello Kuikly 你好世界")
+                    fontSize(16f)
+                    letterSpacing(5f)
+                    backgroundColor(0xFFEEEEEE)
+                    marginBottom(5f)
+                }
+            }
+            Text {
+                attr {
+                    text("letterSpacing(10f) Hello Kuikly 你好世界")
+                    fontSize(16f)
+                    letterSpacing(10f)
+                    backgroundColor(0xFFEEEEEE)
+                    marginBottom(5f)
+                }
+            }
+            // Rich text with letterSpacing
+            RichText {
+                attr {
+                    backgroundColor(0xFFEEEEEE)
+                    marginBottom(5f)
+                }
+                Span {
+                    text("RichText span1(letterSpacing=4)  ")
+                    fontSize(16f)
+                    letterSpacing(4f)
+                }
+                Span {
+                    text("span2(letterSpacing=0)")
+                    fontSize(16f)
+                    letterSpacing(0f)
+                }
+            }
+        }
+    }
+
+    override fun createAttr(): ComposeAttr {
+        return ComposeAttr()
+    }
+
+    override fun createEvent(): ComposeEvent {
+        return ComposeEvent()
+    }
+}
+
+internal fun ViewContainer<*, *>.TextExampleLetterSpacing(init: TextExampleLetterSpacing.() -> Unit) {
+    addChild(TextExampleLetterSpacing(), init)
+}
+
+internal class TextExampleLineBreakMargin: ComposeView<ComposeAttr, ComposeEvent>() {
+    private var lineBreakTriggered1 by com.tencent.kuikly.core.reactive.handler.observable(false)
+    private var lineBreakTriggered2 by com.tencent.kuikly.core.reactive.handler.observable(false)
+    private var lineBreakTriggeredRich by com.tencent.kuikly.core.reactive.handler.observable(false)
+
+    override fun body(): ViewBuilder {
+        val ctx = this
+        return {
+            attr {
+                flexDirectionColumn()
+                justifyContentFlexStart()
+                padding(all = 16f)
+            }
+            // Example 1: 2 lines + lineBreakMargin(80), long text triggers onLineBreakMargin
+            Text {
+                attr {
+                    text("这是一段用于演示 lineBreakMargin 的较长文本，" +
+                        "当最后一行右侧预留 80 的空白区域后，如果文本被折叠则会触发 onLineBreakMargin 事件。" +
+                        "再多写一些内容保证会换行到第二行被截断。")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                    lines(2)
+                    lineHeight(20f)
+                    lineBreakMargin(80f)
+                    backgroundColor(0xFFF0E68C)
+                    marginBottom(5f)
+                }
+                event {
+                    onLineBreakMargin {
+                        ctx.lineBreakTriggered1 = true
+                        KLog.i("TextExamplePage", "Example1 onLineBreakMargin fired")
+                    }
+                }
+            }
+            Text {
+                attr {
+                    text("Example1 onLineBreakMargin 已触发: ${ctx.lineBreakTriggered1}")
+                    fontSize(13f)
+                    color(Color.GRAY)
+                    marginBottom(10f)
+                }
+            }
+
+            // Example 2: short text, not enough to wrap, onLineBreakMargin should NOT fire
+            Text {
+                attr {
+                    text("短文本 lineBreakMargin(80)")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                    lines(2)
+                    lineHeight(20f)
+                    lineBreakMargin(80f)
+                    backgroundColor(0xFFADD8E6)
+                    marginBottom(5f)
+                }
+                event {
+                    onLineBreakMargin {
+                        ctx.lineBreakTriggered2 = true
+                        KLog.i("TextExamplePage", "Example2 onLineBreakMargin fired (unexpected)")
+                    }
+                }
+            }
+            Text {
+                attr {
+                    text("Example2 onLineBreakMargin 已触发: ${ctx.lineBreakTriggered2}")
+                    fontSize(13f)
+                    color(Color.GRAY)
+                    marginBottom(10f)
+                }
+            }
+
+            // Example 3: different margin values
+            Text {
+                attr {
+                    text("lineBreakMargin(40)：" +
+                        "这是一段文本用于演示不同的右侧预留宽度效果，" +
+                        "预留 40 时最后一行右边会有较小的空白区域。" +
+                        "再加点内容保证超过两行被截断显示省略号。")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                    lines(2)
+                    lineHeight(20f)
+                    lineBreakMargin(40f)
+                    backgroundColor(0xFFFFA07A)
+                    marginBottom(5f)
+                }
+            }
+            Text {
+                attr {
+                    text("lineBreakMargin(120)：" +
+                        "这是一段文本用于演示不同的右侧预留宽度效果，" +
+                        "预留 120 时最后一行右边会有较大的空白区域，可以用于放置\"查看更多\"按钮。" +
+                        "再加点内容保证超过两行被截断显示省略号。")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                    lines(2)
+                    lineHeight(20f)
+                    lineBreakMargin(120f)
+                    backgroundColor(0xFFFFA07A)
+                    marginBottom(5f)
+                }
+            }
+
+            // Example 4: RichText with lineBreakMargin + onLineBreakMargin
+            RichText {
+                attr {
+                    lines(2)
+                    lineHeight(20f)
+                    lineBreakMargin(100f)
+                    backgroundColor(0xFFF0E68C)
+                    marginBottom(5f)
+                }
+                Span {
+                    text("RichText+lineBreakMargin(100)：")
+                    fontSize(15f)
+                    color(Color(0xFFEE3333))
+                    fontWeightBold()
+                }
+                Span {
+                    text("这里演示富文本在最后一行右侧预留 100 宽度的空白区域，")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                }
+                // TODO: 临时注释，因为ImageSpan刚好落在lineBreakMargin预留区时不会被裁剪
+                // ImageSpan {
+                //     size(20f, 20f)
+                //     src("https://wfiles.gtimg.cn/wuji_dashboard/xy/starter/be8ff284.png")
+                //     borderRadius(4f)
+                // }
+                Span {
+                    text("当文本+图片的总长度超过两行时，会被折叠并触发 onLineBreakMargin 事件，")
+                    fontSize(15f)
+                    color(Color.BLACK)
+                }
+                Span {
+                    text("可在右侧预留区域放置\"展开\"按钮。")
+                    fontSize(15f)
+                    color(Color(0xFF3377FF))
+                    textDecorationUnderLine()
+                }
+                event {
+                    onLineBreakMargin {
+                        ctx.lineBreakTriggeredRich = true
+                        KLog.i("TextExamplePage", "RichText onLineBreakMargin fired")
+                    }
+                }
+            }
+            Text {
+                attr {
+                    text("RichText onLineBreakMargin 已触发: ${ctx.lineBreakTriggeredRich}")
+                    fontSize(13f)
+                    color(Color.GRAY)
+                    marginBottom(10f)
+                }
+            }
+        }
+    }
+
+    override fun createAttr(): ComposeAttr {
+        return ComposeAttr()
+    }
+
+    override fun createEvent(): ComposeEvent {
+        return ComposeEvent()
+    }
+}
+
+internal fun ViewContainer<*, *>.TextExampleLineBreakMargin(init: TextExampleLineBreakMargin.() -> Unit) {
+    addChild(TextExampleLineBreakMargin(), init)
+}
+
 @Page("TextExamplePage")
 internal class TextExamplePage: BasePager() {
     override fun body(): ViewBuilder {
@@ -775,6 +1185,10 @@ internal class TextExamplePage: BasePager() {
                 TextExampleRichText {  }
                 ViewExampleSectionHeader { attr { title = "LineHeight" } }
                 TextExampleLineHeight {  }
+                ViewExampleSectionHeader { attr { title = "LetterSpacing" } }
+                TextExampleLetterSpacing {  }
+                ViewExampleSectionHeader { attr { title = "LineBreakMargin & onLineBreakMargin" } }
+                TextExampleLineBreakMargin {  }
             }
         }
     }

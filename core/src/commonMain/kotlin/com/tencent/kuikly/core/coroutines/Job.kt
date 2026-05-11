@@ -1,11 +1,10 @@
 package com.tencent.kuikly.core.coroutines
 
 import kotlin.coroutines.CoroutineContext
-import kotlin.jvm.JvmName
-public typealias CompletionHandler = (cause: Throwable?) -> Unit
-// --------------- core job interfaces ---------------
 
 /**
+ * this is a simplified implementation for [Coroutines](https://kotlinlang.org/docs/coroutines-guide.html).
+ *
  * A background job. Conceptually, a job is a cancellable thing with a life-cycle that
  * culminates in its completion.
  *
@@ -16,18 +15,26 @@ public typealias CompletionHandler = (cause: Throwable?) -> Unit
  *
  * Conceptually, an execution of a job does not produce a result value. Jobs are launched solely for their
  * side-effects. See [Deferred] interface for a job that produces a result.
- *
- *
  * */
-public interface Job: CoroutineContext.Element {
+interface Job : CoroutineContext.Element {
     /**
      * Key for [Job] instance in the coroutine context.
      */
-    public companion object Key : CoroutineContext.Key<Job>
+    companion object Key : CoroutineContext.Key<Job>
 
+    /**
+     * Returns `true` if this Job is currently active (not cancelled or completed).
+     */
+    val isActive: Boolean
 
-
+    /**
+     * Cancels this Job. This operation is idempotent.
+     *
+     * Cancelling a Job prevents future resume of pending suspend points
+     * and triggers completion handlers with the provided [cause].
+     *
+     * @param cause optional cancellation/termination cause; `null` for normal cancel.
+     */
+    fun cancel(cause: Throwable? = null)
 
 }
-
-

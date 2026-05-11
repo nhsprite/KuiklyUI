@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,7 +19,6 @@ import com.tencent.kuikly.core.base.ContainerAttr
 import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.event.Event
 
-
 class CenterView : LayoutView<ContainerAttr, Event>() {
 
     override fun willInit() {
@@ -29,7 +28,6 @@ class CenterView : LayoutView<ContainerAttr, Event>() {
             alignItemsCenter()
         }
     }
-
 
     override fun createAttr(): ContainerAttr {
         return ContainerAttr()

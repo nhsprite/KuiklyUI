@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,7 +18,7 @@ package com.tencent.kuikly.core.reactive
 import com.tencent.kuikly.core.base.PagerScope
 import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.collection.fastHashMapOf
-import com.tencent.kuikly.core.collection.fastHashSetOf
+import com.tencent.kuikly.core.collection.fastMutableSetOf
 import com.tencent.kuikly.core.collection.fastLinkedHashSetOf
 import com.tencent.kuikly.core.collection.toFastList
 import com.tencent.kuikly.core.collection.toFastMutableSet
@@ -26,9 +26,14 @@ import com.tencent.kuikly.core.collection.toFastSet
 import com.tencent.kuikly.core.exception.ReactiveObserverNotFoundException
 import com.tencent.kuikly.core.manager.BridgeManager
 import com.tencent.kuikly.core.manager.PagerManager
+import com.tencent.kuikly.core.pager.PageEventTrace
 import com.tencent.kuikly.core.reactive.collection.ObservableList
 import com.tencent.kuikly.core.reactive.collection.ObservableSet
 import com.tencent.kuikly.core.reactive.handler.PropertyAccessHandler
+import com.tencent.kuikly.core.utils.VERIFY_REACTIVE_OBSERVER
+import com.tencent.kuikly.core.utils.VERIFY_THREAD_LEGACY
+import com.tencent.kuikly.core.utils.checkThreadLegacy
+import com.tencent.kuikly.core.utils.verifyFailedHandler
 import kotlin.properties.ReadWriteProperty
 
 /*
@@ -36,8 +41,8 @@ import kotlin.properties.ReadWriteProperty
  */
 class ReactiveObserver {
 
-    private val activeReadPropertyNames = fastHashSetOf<String>() // 当前待收集依赖的key
-    private val activeWritePropertyNames = fastHashSetOf<String>()
+    private val activeReadPropertyNames = fastMutableSetOf<String>() // 当前待收集依赖的key
+    private val activeWritePropertyNames = fastMutableSetOf<String>()
     private val propertyObserverFnMap = fastHashMapOf<String, MutableSet<ObserverFn>>() // 对key感兴趣的观察者
     private val observerRemoveFnOwnerMap = fastHashMapOf<Int, MutableSet<ObserverRemoveFn>>()
     private val observerFnCollectionPropertiesMap = fastHashMapOf<ObserverFn, Set<String>>() // 闭包收集的属性
@@ -74,7 +79,6 @@ class ReactiveObserver {
         endCollectDependency()
         return result
     }
-
 
     fun unbindValueChange(byOwner: Any) {
         removeObserver(byOwner)
@@ -127,7 +131,7 @@ class ReactiveObserver {
     fun addObserver(observerFnOwner: Any, observerFn: ObserverFn) : Boolean {
         if (activeReadPropertyNames.isEmpty()) {
             activeWritePropertyNames.clear()
-            return false;
+            return false
         }
         // 如果收集读的key集合中包含写集合的key，需要取消对该key的依赖收集，避免循环嵌套递归响应
         val readPropertyKeyList = activeReadPropertyNames.toFastMutableSet()
@@ -195,17 +199,19 @@ class ReactiveObserver {
 
     // get value callback
     internal fun notifyGetValue(propertyOwner: PropertyOwner, propertyName: String) {
-        checkThread()
+        checkThreadLegacy()
         if (!startCollectDependency) {
             return
         }
         activeReadPropertyNames.add(buildPropertyKey(propertyOwner, propertyName))
     }
 
-
     // set value callback
     internal fun notifyPropertyObserver(propertyOwner: PropertyOwner, propertyName: String) {
-        checkThread()
+        notifyPropertyObserver(propertyOwner, propertyName, null)
+    }
+    internal fun notifyPropertyObserver(propertyOwner: PropertyOwner, propertyName: String, pageId: String?) {
+        checkThreadLegacy()
         val propertyKey = buildPropertyKey(
             propertyOwner,
             propertyName
@@ -221,21 +227,30 @@ class ReactiveObserver {
                 val fromObserverFnSet = it.toFastSet()
                 addLazyTaskUtilEndCollectDependency {
                     currentChangingPropertyKey = propertyKey
-                    fireObserverFn(propertyKey, fromObserverFnSet)
+                    fireObserverFn(propertyKey, fromObserverFnSet, pageId)
                     currentObservablePropertyKey = ""
                     currentChangingPropertyKey = null
                 }
             }
         } else {
             currentChangingPropertyKey = propertyKey
-            fireObserverFn(propertyKey, propertyObserverFnMap[propertyKey])
+            fireObserverFn(propertyKey, propertyObserverFnMap[propertyKey], pageId)
             currentObservablePropertyKey = ""
             currentChangingPropertyKey = null
         }
     }
 
+
     private fun fireObserverFn(propertyKey: String, fromObserverFnSet: Set<ObserverFn>?) {
+        fireObserverFn(propertyKey, fromObserverFnSet, null)
+    }
+    private fun fireObserverFn(propertyKey: String, fromObserverFnSet: Set<ObserverFn>?, pageId: String?) {
         fromObserverFnSet?.also {
+            var trace : PageEventTrace? = null
+            if (pageId != null){
+                trace = PagerManager.getPagerEventTrace(pageId)
+            }
+            trace?.onFireObserverFnStart(propertyKey, it.size)
             it.toFastList().forEach { observerFn ->
                 if (it.contains(observerFn)) {
                     observerFnCollectionPropertiesMap[observerFn]?.also {
@@ -249,22 +264,14 @@ class ReactiveObserver {
                     }
                 }
             }
+            trace?.onFireObserverFnEnd(propertyKey, it.size)
         }
 
-
     }
-
-
 
     private fun buildPropertyKey(propertyOwner: PropertyOwner, propertyName: String): String {
         currentObservablePropertyKey = "${propertyOwner}_$propertyName"
         return currentObservablePropertyKey
-    }
-
-    private fun checkThread() {
-        if (VERIFY_THREAD) {
-            platformCheckThread { "observable must access on context thread" }
-        }
     }
 
     companion object {
@@ -358,8 +365,36 @@ class ReactiveObserver {
             })
         }
 
-        var VERIFY_THREAD = false
-        var VERIFY_OBSERVER = false
+        @Deprecated(
+            "Use Pager.VERIFY_THREAD instead",
+            ReplaceWith("Pager.VERIFY_THREAD", "com.tencent.kuikly.core.pager.Pager"),
+            DeprecationLevel.ERROR
+        )
+        var VERIFY_THREAD
+            get() = VERIFY_THREAD_LEGACY
+            set(value) {
+                VERIFY_THREAD_LEGACY = value
+            }
+
+        @Deprecated(
+            "Use Pager.VERIFY_REACTIVE_OBSERVER instead",
+            ReplaceWith("Pager.VERIFY_REACTIVE_OBSERVER", "com.tencent.kuikly.core.pager.Pager"),
+            DeprecationLevel.ERROR
+        )
+        var VERIFY_OBSERVER
+            get() = VERIFY_REACTIVE_OBSERVER
+            set(value) {
+                VERIFY_REACTIVE_OBSERVER = value
+            }
+
+        @Deprecated(
+            "Use Pager.verifyFailed(handler) method instead",
+            ReplaceWith("Pager.verifyFailed(handler)", "com.tencent.kuikly.core.pager.Pager"),
+            DeprecationLevel.ERROR
+        )
+        fun verifyFailed(handler: (RuntimeException) -> Unit) {
+            verifyFailedHandler = handler
+        }
     }
 }
 
@@ -387,7 +422,7 @@ internal class UnsafePropertyAccessHandlerImpl(
             val lastPageId = BridgeManager.currentPageId
             BridgeManager.currentPageId = scope.pagerId
             try {
-                observer.notifyPropertyObserver(propertyOwner, propertyName)
+                observer.notifyPropertyObserver(propertyOwner, propertyName, scope.pagerId)
             } finally {
                 BridgeManager.currentPageId = lastPageId
             }
@@ -400,18 +435,20 @@ internal class UnsafePropertyAccessHandlerImpl(
 
     override fun getReactiveObserver(): ReactiveObserver? {
         val pagerId = scope.pagerId.ifEmpty {
-            if (ReactiveObserver.VERIFY_OBSERVER) {
-                throw ReactiveObserverNotFoundException("PagerScope not initialized")
+            if (VERIFY_REACTIVE_OBSERVER) {
+                verifyFailedHandler(
+                    ReactiveObserverNotFoundException("PagerScope not initialized")
+                )
             }
             // 用currentPageId兜底，以保持向前兼容
             BridgeManager.currentPageId
         }
         val observer = PagerManager.getReactiveObserver(pagerId)
-        if (observer == null && ReactiveObserver.VERIFY_OBSERVER) {
-            throw ReactiveObserverNotFoundException("ReactiveObserver not found: $pagerId")
+        if (observer == null && VERIFY_REACTIVE_OBSERVER) {
+            verifyFailedHandler(
+                ReactiveObserverNotFoundException("ReactiveObserver not found: $pagerId")
+            )
         }
         return observer
     }
 }
-
-internal expect inline fun platformCheckThread(msg: () -> String)

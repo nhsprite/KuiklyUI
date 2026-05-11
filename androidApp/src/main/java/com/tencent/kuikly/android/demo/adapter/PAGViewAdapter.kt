@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,15 +16,13 @@
 package com.tencent.kuikly.android.demo.adapter
 
 import android.content.Context
-import android.content.res.AssetManager
 import android.view.View
 import com.tencent.kuikly.core.render.android.adapter.IKRPAGViewAdapter
 import com.tencent.kuikly.core.render.android.adapter.IPAGView
 import com.tencent.kuikly.core.render.android.adapter.IPAGViewListener
-import com.tencent.kuikly.core.render.android.expand.component.pag.KRPAGView
-import org.libpag.PAGTextLayer
-import org.libpag.PAGImageLayer
 import org.libpag.PAGImage
+import org.libpag.PAGImageLayer
+import org.libpag.PAGTextLayer
 import org.libpag.PAGView
 
 /**
@@ -61,12 +59,20 @@ class KRPagView(context: Context) : PAGView(context), IPAGView {
         setRepeatCount(count)
     }
 
+    override fun setPAGViewScaleMode(scaleMode: Int) {
+        setScaleMode(scaleMode)
+    }
+
     override fun playPAGView() {
         play()
     }
 
     override fun stopPAGView() {
         stop()
+    }
+
+    override fun setProgressPAGView(value: Double) {
+        setProgress(value)
     }
 
     override fun replaceTextLayerContent(layerName: String, text: String) {

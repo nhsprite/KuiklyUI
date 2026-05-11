@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,11 +15,21 @@
 
 package com.tencent.kuikly.core.views
 
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.DeclarativeBaseView
+import com.tencent.kuikly.core.base.Size
+import com.tencent.kuikly.core.base.ViewConst
+import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.base.domChildren
+import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.base.event.Event
-import com.tencent.kuikly.core.layout.*
-import com.tencent.kuikly.core.pager.IPagerLayoutEventObserver
+import com.tencent.kuikly.core.layout.FlexDirection
+import com.tencent.kuikly.core.layout.FlexNode
+import com.tencent.kuikly.core.layout.FlexPositionType
+import com.tencent.kuikly.core.layout.Frame
+import com.tencent.kuikly.core.layout.StyleSpace
+import com.tencent.kuikly.core.layout.undefined
 import com.tencent.kuikly.core.pager.Pager
+import com.tencent.kuikly.core.views.internal.GroupEvent
 import kotlin.math.max
 
 /**
@@ -33,7 +43,7 @@ fun ViewContainer<*, *>.List(init: ListView<*, *>.() -> Unit) {
 open class ListAttr : ScrollerAttr() {
     var firstContentLoadMaxIndex = 8
     internal var preloadViewDistance = 0f
-
+    internal var initContentOffset = 0f
     /**
      * 设置首次内容加载的最大条数。
      * @param maxIndex 首次加载的最大条数。
@@ -59,13 +69,9 @@ open class ListAttr : ScrollerAttr() {
     }
 }
 
-open class ListEvent : ScrollerEvent() {
+open class ListEvent : ScrollerEvent()
 
-}
-
-interface IListViewEventObserver: IScrollerViewEventObserver {
-
-}
+interface IListViewEventObserver: IScrollerViewEventObserver
 
 open class ListView<A : ListAttr, E : ListEvent> : ScrollerView<A, E>() {
     private var prepareForReuse = false
@@ -125,20 +131,17 @@ open class ListContentView : ScrollerContentView() {
     private var didFirstLayout = false
     private var waitingToNextTickLayout = false
     private var didAddNextTickUpdateVisibleOffset = false
+    private var didInitContentOffset = false
 
-    override fun setFrameToRenderView(frame: Frame) {
-        super.setFrameToRenderView(frame)
-        updateOffsetIfNeed()
-    }
     override fun didInsertDomChild(child: DeclarativeBaseView<*, *>, index: Int) {
         super.didInsertDomChild(child, index)
         child.getViewAttr().setProp(SCROLL_INDEX, index)
-        val listFlexNode = flexNode;
+        val listFlexNode = flexNode
         val ctx = this
         if (child.flexNode.positionType == FlexPositionType.ABSOLUTE) {
             child.absoluteFlexNode = true
         } else {
-            child.attr {
+            child.getViewAttr().apply {
                 if (ctx.isRowFlexDirection()) {
                     positionAbsolute()
                     top(max(listFlexNode.getPadding(StyleSpace.Type.TOP), 0f))
@@ -161,8 +164,8 @@ open class ListContentView : ScrollerContentView() {
         return ScrollerAttr()
     }
 
-    override fun createEvent(): Event {
-        return Event()
+    override fun createEvent(): GroupEvent {
+        return GroupEvent()
     }
 
     override fun createRenderView() {
@@ -197,8 +200,8 @@ open class ListContentView : ScrollerContentView() {
             return
         }
         val onlyParentDirty = (parentDirty == true && !flexNode.isDirty)
-        val dirtyChildren = arrayListOf<FlexNode>()
-        val absoluteDirtyChildren = arrayListOf<FlexNode>()
+        val dirtyChildren = fastArrayListOf<FlexNode>()
+        val absoluteDirtyChildren = fastArrayListOf<FlexNode>()
         val domChildren = domChildren()
         domChildren.forEachIndexed { index, declarativeBaseView ->
             if (onlyParentDirty || declarativeBaseView.flexNode.isDirty) {
@@ -226,7 +229,7 @@ open class ListContentView : ScrollerContentView() {
             }
         } else {
             if (waitingToNextTickLayout) { // maxIndex内的item位置以及layout过的节点继续更新
-                val domFlexNodes = arrayListOf<FlexNode>()
+                val domFlexNodes = fastArrayListOf<FlexNode>()
                 domChildren.forEach {
                     domFlexNodes.add(it.flexNode)
                 }
@@ -250,7 +253,25 @@ open class ListContentView : ScrollerContentView() {
         }
     }
 
+    override fun didSetFrameToRenderView() {
+        super.didSetFrameToRenderView()
+        initContentOffsetIfNeed()
+    }
 
+    private fun initContentOffsetIfNeed() {
+        if (!didInitContentOffset) { // 初始化列表偏移量，默认为0f
+            didInitContentOffset = true
+            (parent as? ListView<*, *>)?.also {
+                if (it.getViewAttr().initContentOffset > 0) {
+                    if (isRowFlexDirection()) {
+                        it.setContentOffset(it.getViewAttr().initContentOffset, 0f)
+                    } else {
+                        it.setContentOffset(0f, it.getViewAttr().initContentOffset)
+                    }
+                }
+            }
+        }
+    }
 
     protected fun needLayoutChildren(): List<DeclarativeBaseView<*, *>> {
         return domChildren().filterNot {
@@ -349,19 +370,21 @@ open class ListContentView : ScrollerContentView() {
         if (parent === null || parent!!.flexNode.layoutFrame.isDefaultValue() || renderView == null) {
             return true
         }
-        val needRemoveViewViews = arrayListOf<DeclarativeBaseView<*, *>>()
-        val needCreateViewViews = arrayListOf<DeclarativeBaseView<*, *>>()
+        val needRemoveViewViews = fastArrayListOf<DeclarativeBaseView<*, *>>()
+        val needCreateViewViews = fastArrayListOf<DeclarativeBaseView<*, *>>()
+        val allChildren = renderChildren()
+        val layoutedChildren = allChildren.filterNot {
+            val default = it.flexNode.layoutFrame.isDefaultValue()
+            if (default) {
+                containUnLayoutNode = true
+            }
+            default
+        }
         if (isRowFlexDirection()) {
             val visibleOffset = visibleOffset(true)
             val visibleLeft = offsetX - visibleOffset
             val visibleRight = offsetX + parent!!.flexNode.layoutFrame.width + visibleOffset
-            renderChildren().filterNot {
-                val default = it.flexNode.layoutFrame.isDefaultValue()
-                if (default) {
-                    containUnLayoutNode = true
-                }
-                default
-            }.forEach {
+            layoutedChildren.forEach {
                 val frame = it.flexNode.layoutFrame
                 if (frame.maxX() < visibleLeft || frame.minX() > visibleRight) {
                     if (shouldRemoveRenderView(it)) {
@@ -377,13 +400,7 @@ open class ListContentView : ScrollerContentView() {
             val visibleOffset = visibleOffset(false)
             val visibleTop = offsetY - visibleOffset
             val visibleBottom = offsetY + parent!!.flexNode.layoutFrame.height + visibleOffset
-            renderChildren().filterNot {
-                val default = it.flexNode.layoutFrame.isDefaultValue()
-                if (default) {
-                    containUnLayoutNode = true
-                }
-                default
-            }.forEach {
+            layoutedChildren.forEach {
                 val frame = it.flexNode.layoutFrame
                 if (frame.maxY() < visibleTop || frame.minY() > visibleBottom) {
                     if (shouldRemoveRenderView(it)) {
@@ -399,40 +416,38 @@ open class ListContentView : ScrollerContentView() {
         needRemoveViewViews.forEach { component ->
             component.removeRenderView()
         }
+        var renderViewCount = 0
+        var traversalIndex = 0
         needCreateViewViews.forEach { component ->
-            component.createRenderView()
-            renderView!!.insertSubRenderView(component.nativeRef, -1)
+            if (component is HoverView) {
+                // render层会干预hoverView的排序，因此直接插到最后面
+                component.createRenderView()
+                renderView!!.insertSubRenderView(component.nativeRef, -1)
+                return@forEach
+            }
+            for (i in traversalIndex until allChildren.size) {
+                val child = allChildren[i]
+                if (child is HoverView) {
+                    // render层会干预hoverView的排序，因此统一插到最后面，不统计其renderViewCount
+                    continue
+                }
+                if (child === component) {
+                    // found component, insert renderView at index=renderViewCount
+                    component.createRenderView()
+                    renderView!!.insertSubRenderView(component.nativeRef, renderViewCount)
+                    traversalIndex = i + 1
+                    renderViewCount++
+                    return@forEach
+                }
+                if (child.renderView != null) {
+                    // traverse before component, counting renderView to get correct index
+                    renderViewCount++
+                }
+            }
+            // should not reach here, set traversalIndex to the end to avoid later creation
+            traversalIndex = allChildren.size
         }
         return !containUnLayoutNode
-    }
-
-    private fun updateOffsetIfNeed() {
-        if (flexNode.layoutFrame.isDefaultValue()) {
-            return
-        }
-        parent?.also { parentView ->
-            var maxOffset = flexNode.layoutFrame.height - parentView.flexNode.layoutFrame.height
-            var currentOffset = offsetY
-            if (isRowFlexDirection()) {
-                maxOffset = flexNode.layoutFrame.width - parentView.flexNode.layoutFrame.width
-                currentOffset = offsetX
-            }
-            if (maxOffset < 0f) {
-                maxOffset = 0f
-            }
-            if (currentOffset >= 0 && currentOffset > maxOffset) {
-                if (isRowFlexDirection()) {
-                    offsetX = maxOffset
-                } else {
-                    offsetY = maxOffset
-                }
-                (parentView as ScrollerView).setContentOffset(offsetX, offsetY, false)
-            }
-        }
-    }
-
-    fun isRowFlexDirection(): Boolean {
-        return flexNode.flexDirection == FlexDirection.ROW || flexNode.flexDirection == FlexDirection.ROW_REVERSE
     }
 
     open fun updateChildLayout() {
@@ -449,4 +464,3 @@ open class ListContentView : ScrollerContentView() {
         const val SCROLL_INDEX = "scrollIndex"
     }
 }
-

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -40,9 +40,14 @@ class CodecModule : Module() {
         return toNative(false, METHOD_BASE64_DECODE, string, null, true).toString()
     }
 
-    // 计算字符串的 MD5 散列值
+    // 计算字符串的 MD5 散列值（16位）
     fun md5(string: String): String {
         return toNative(false, METHOD_MD5, string, null, true).toString()
+    }
+
+    // 计算字符串的 MD5 散列值（32位）
+    fun md5With32(string: String): String {
+        return toNative(false, METHOD_MD5_32, string, null, true).toString()
     }
 
     // 计算字符串的 SHA256 散列值
@@ -54,7 +59,6 @@ class CodecModule : Module() {
         return MODULE_NAME
     }
 
-
     companion object {
         const val MODULE_NAME = ModuleConst.CODEC
         const val METHOD_URL_ENCODE = "urlEncode"
@@ -62,6 +66,7 @@ class CodecModule : Module() {
         const val METHOD_BASE64_ENCODE = "base64Encode"
         const val METHOD_BASE64_DECODE = "base64Decode"
         const val METHOD_MD5 = "md5"
+        const val METHOD_MD5_32 = "md5With32"
         const val METHOD_SHA256 = "sha256"
     }
 }

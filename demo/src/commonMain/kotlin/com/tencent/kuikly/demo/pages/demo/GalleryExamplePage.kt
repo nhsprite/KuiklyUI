@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,10 +16,11 @@
 package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.annotations.Page
-import com.tencent.kuikly.core.base.*
-import com.tencent.kuikly.core.base.event.appearPercentage
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.PagerScope
+import com.tencent.kuikly.core.base.Scale
+import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.directives.vfor
-import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.reactive.handler.observableList
 import com.tencent.kuikly.core.views.PageList
@@ -29,10 +30,12 @@ import com.tencent.kuikly.demo.pages.demo.base.NavBar
 
 const val minScale = 0.85f
 const val galleryMarginLeft = 50f // 画廊居中的内容距离最左边margin
-internal class GalleryCardData {
+internal class GalleryCardData(scope: PagerScope) {
     var bgColor = Color.BLACK
-    var transformScale by observable(minScale)
+    var transformScale by scope.observable(minScale)
 }
+// helper fun for refactoring
+internal fun PagerScope.GalleryCardData() = GalleryCardData(this)
 
 @Page("GalleryExamplePage")
 internal class GalleryExamplePage : BasePager() {
@@ -109,11 +112,5 @@ internal class GalleryExamplePage : BasePager() {
 
         }
     }
-
-
-
-
-
-
 
 }

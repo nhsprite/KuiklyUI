@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,7 +18,7 @@ package com.tencent.kuikly.core.manager
 import com.tencent.kuikly.core.base.Attr
 import com.tencent.kuikly.core.base.DeclarativeBaseView
 import com.tencent.kuikly.core.base.event.Event
-import com.tencent.kuikly.core.collection.fastLinkedMapOf
+import com.tencent.kuikly.core.collection.fastMutableMapOf
 import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.nvi.NativeBridge
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
@@ -58,15 +58,27 @@ object BridgeManager {
     @Deprecated("使用Pager上下文的pagerId代替")
     var currentPageId : String = ""
 
-    private val nativeBridgeMap = fastLinkedMapOf<String, NativeBridge>()
-    private val callObserverMap = fastLinkedMapOf<String, IBridgeCallObserver>()
+    private val nativeBridgeMap = fastMutableMapOf<String, NativeBridge>()
+    private val callObserverMap = fastMutableMapOf<String, IBridgeCallObserver>()
+
+    var catchException = true
+        private set
 
     fun isDidInit(): Boolean {
         return didInit
     }
 
-    fun init() {
+    fun init(catchException: Boolean) {
         didInit = true
+        this.catchException = catchException
+    }
+
+    @Deprecated(
+        "Use BridgeManager.init(Boolean) instead",
+        level = DeprecationLevel.HIDDEN
+    )
+    fun init() {
+        init(true)
     }
 
     fun registerNativeBridge(instanceId: String, nativeBridge: NativeBridge) {
@@ -329,7 +341,6 @@ object BridgeManager {
     fun callSyncFlushUIMethod(instanceId: String) {
         callNativeMethod(NativeMethod.SYNC_FLUSH_UI, instanceId)
     }
-
 
 }
 

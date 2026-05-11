@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import <QuartzCore/QuartzCore.h>
 
 
@@ -36,6 +36,7 @@ extern NSString *const KRBGAttributeKey;
  */
 + (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode;
 + (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode lineBreakMarin:(CGFloat)marin;
++ (CGSize)sizeThatFits:(CGSize)size attributedString:(NSAttributedString *)attString numberOfLines:(NSUInteger)lines lineBreakMode:(NSLineBreakMode)mode lineBreakMarin:(CGFloat)marin lineHeight:(CGFloat)lineHeight;
 
 @end
 
@@ -67,9 +68,12 @@ extern NSString *const KRBGAttributeKey;
 @property (nonatomic, assign) BOOL isBreakLine;//是否被截断
 
 @property (nonatomic, assign) CGFloat lineBreakMargin;//截断边距
+@property (nonatomic, assign) CGFloat lineHeight; 
+
 // initialize
 - (instancetype)initWithAttributedText:(NSAttributedString *)attributedText;
 - (instancetype)initWithTextStorage:(NSTextStorage *)textStorage;
+- (instancetype)initWithTextStorage:(NSTextStorage *)textStorage lineHeight:(CGFloat)lineHeight;
 
 @property (nonatomic, strong, readonly, nullable) NSArray<NSTextAttachment *> *attachmentViews;
 @property (nonatomic, strong, readonly, nullable) NSSet<NSTextAttachment *> *attachmentViewSet;

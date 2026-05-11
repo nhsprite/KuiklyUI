@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,7 +18,6 @@ package com.tencent.kuikly.core.render.android.expand.component
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import com.tencent.kuikly.core.render.android.adapter.IKRVideoView
 import com.tencent.kuikly.core.render.android.adapter.IKRVideoViewListener
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager

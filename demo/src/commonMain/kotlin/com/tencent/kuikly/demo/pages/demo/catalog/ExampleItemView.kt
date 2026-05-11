@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,16 +15,21 @@
 
 package com.tencent.kuikly.demo.pages.demo.catalog
 
-
-import com.tencent.kuikly.core.base.*
+import com.tencent.kuikly.core.base.Border
+import com.tencent.kuikly.core.base.BorderStyle
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ComposeAttr
+import com.tencent.kuikly.core.base.ComposeEvent
+import com.tencent.kuikly.core.base.ComposeView
+import com.tencent.kuikly.core.base.PagerScope
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.directives.vif
 import com.tencent.kuikly.core.module.RouterModule
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.core.views.compose.Button
-import com.tencent.kuikly.demo.pages.demo.catalog.ExampleItemData
-
-
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -120,27 +125,6 @@ internal class ExampleItemView : ComposeView<ExampleItemAttr, ComposeEvent>() {
                         }
                     }
                 }
-//                vif({ctx.attr.itemData.imperativeExampleUrl.isNotEmpty()}) {
-//                    Button {
-//                        attr {
-//                            marginTop(10f)
-//                            padding(left = 6f, top = 6f, right = 6f, bottom = 6f)
-//                            backgroundColor(ctx.avatarLightColor)
-//                            titleAttr {
-//                                text("查看命令式Demo")
-//                                fontSize(15f)
-//                                color(ctx.mainColor)
-//                            }
-//                        }
-//                        event {
-//                            click {
-//
-//                                getPager().acquireModule<RouterModule>(RouterModule.MODULE_NAME).openPage(ctx.attr.itemData.imperativeExampleUrl)
-//                            }
-//                        }
-//                    }
-//                }
-
             }
 
         }
@@ -186,7 +170,13 @@ internal fun ViewContainer<*, *>.ExampleItem(init: ExampleItemView.() -> Unit) {
     addChild(ExampleItemView(), init)
 }
 
-
 internal class ExampleItemAttr : ComposeAttr() {
     lateinit var itemData: ExampleItemData
+}
+
+internal class ExampleItemData(scope: PagerScope) {
+    var avatarText by scope.observable("")
+    var titleText by scope.observable("")
+    var subtitleText by scope.observable("")
+    var declarativeExampleUrl by scope.observable("")
 }

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,21 +15,61 @@
 
 package com.tencent.kuikly.core.views
 
-
-
 import com.tencent.kuikly.core.base.*
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.base.event.EventHandlerFn
-import com.tencent.kuikly.core.collection.fastArrayListOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
+import com.tencent.kuikly.core.layout.FlexAlign
+import com.tencent.kuikly.core.layout.FlexDirection
+import com.tencent.kuikly.core.layout.FlexNode
+import com.tencent.kuikly.core.layout.FlexPositionType
+import com.tencent.kuikly.core.layout.MeasureFunction
+import com.tencent.kuikly.core.layout.MeasureOutput
+import com.tencent.kuikly.core.layout.isUndefined
+import com.tencent.kuikly.core.module.FontModule
 import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
+import com.tencent.kuikly.core.views.InputAttr.Companion.ENABLES_RETURN_KEY_AUTOMATICALLY
+import com.tencent.kuikly.core.views.InputEvent.Companion.INPUT_RETURN
+import com.tencent.kuikly.core.views.shadow.TextShadow
 
-class TextAreaView : DeclarativeBaseView<TextAreaAttr, TextAreaEvent>() {
+open class TextAreaView : DeclarativeBaseView<TextAreaAttr, TextAreaEvent>(), MeasureFunction {
+
+    companion object {
+        private val NON_SHADOW_PROPS by lazy(LazyThreadSafetyMode.NONE) {
+            setOf(
+                Attr.StyleConst.TRANSFORM,
+                Attr.StyleConst.OPACITY,
+                Attr.StyleConst.VISIBILITY,
+                Attr.StyleConst.BACKGROUND_COLOR,
+                TextConst.TEXT_COLOR,
+                TextConst.TINT_COLOR,
+                TextConst.TEXT_SHADOW,
+                TextConst.PLACEHOLDER,
+                TextConst.PLACEHOLDER_COLOR
+            )
+        }
+    }
+
+    private var shadow: TextShadow? = null
+    private val remeasureObserver: InputEventHandlerFn = {
+        if (getViewAttr().getProp(TextConst.VALUES) != null) {
+            // 如果设置了inputSpans，则必须主动监听textDidChange更新输入文本，无需自动重测量
+        } else {
+            shadow?.setProp(TextConst.VALUE, it.text)
+            flexNode.markDirty()
+        }
+    }
 
     override fun willInit() {
         super.willInit()
-        getViewAttr().fontSize(15)
+        shadow = TextShadow(pagerId, nativeRef, ViewConst.TYPE_RICH_TEXT)
+        getViewAttr().apply {
+            fontSize(15)
+            lineHeight(20f)
+        }
     }
+
     override fun createAttr(): TextAreaAttr {
         return TextAreaAttr()
     }
@@ -42,10 +82,30 @@ class TextAreaView : DeclarativeBaseView<TextAreaAttr, TextAreaEvent>() {
         return ViewConst.TYPE_TEXT_AREA
     }
 
+    override fun didRemoveFromParentView() {
+        super.didRemoveFromParentView()
+        flexNode.measureFunction = null
+        shadow?.removeFromParentComponent()
+        shadow = null
+    }
+
+    override fun createFlexNode() {
+        super.createFlexNode()
+        flexNode.measureFunction = this
+    }
+
     override fun createRenderView() {
         super.createRenderView()
         if (attr.autofocus) {
             focus()
+        }
+    }
+
+    override fun didSetProp(propKey: String, propValue: Any) {
+        super.didSetProp(propKey, propValue)
+        if (propKey !in NON_SHADOW_PROPS) {
+            shadow?.setProp(propKey, propValue)
+            flexNode.markDirty()
         }
     }
 
@@ -93,9 +153,96 @@ class TextAreaView : DeclarativeBaseView<TextAreaAttr, TextAreaEvent>() {
         }
     }
 
+    override fun measure(
+        node: FlexNode,
+        width: Float,
+        height: Float,
+        measureOutput: MeasureOutput
+    ) {
+        node.layoutDimensions.run {
+            if (!this[0].isUndefined() && !this[1].isUndefined()) {
+                getViewEvent().removeTextDidChangeObserver(remeasureObserver)
+                measureOutput.width = this[0]
+                measureOutput.height = this[1]
+                return
+            } else {
+                getViewEvent().addTextDidChangeObserver(remeasureObserver)
+            }
+        }
+        val cWidth = if (width.isUndefined()) 100000f else width
+        val cHeight = if (height.isUndefined()) -1f else height
+        // measure by shadow
+        val size = shadow?.calculateRenderViewSize(cWidth, cHeight)
+        var outWidth = size?.width ?: 0f
+        var outHeight = size?.height ?: 0f
+        // check stretch
+        if (!width.isUndefined() && outWidth < width && node.stretchWidth()) {
+            outWidth = width
+        }
+        if (!height.isUndefined() && outHeight < height && node.stretchHeight()) {
+            outHeight = height
+        }
+        // check minWidth
+        node.styleMinWidth.also {
+            if (!it.isUndefined() && outWidth < it) {
+                outWidth = it
+            }
+        }
+        // check maxHeight
+        node.styleMaxHeight.also {
+            if (!it.isUndefined() && outHeight > it) {
+                outHeight = it
+            }
+        }
+        // check minHeight
+        node.styleMinHeight.also {
+            if (!it.isUndefined() && outHeight < it) {
+                outHeight = it
+            }
+        }
+
+        measureOutput.width = outWidth
+        measureOutput.height = outHeight
+    }
+
+    private fun FlexNode.stretchWidth(): Boolean {
+        if (positionType != FlexPositionType.RELATIVE) {
+            return false
+        }
+        val direction = parent?.flexDirection
+        return if (direction == FlexDirection.ROW || direction == FlexDirection.ROW_REVERSE) {
+            stretchMainAxis
+        } else {
+            parent?.layoutWidth?.isUndefined() == false && stretchCrossAxis
+        }
+    }
+
+    private fun FlexNode.stretchHeight(): Boolean {
+        if (positionType != FlexPositionType.RELATIVE) {
+            return false
+        }
+        val direction = parent?.flexDirection
+        return if (direction == FlexDirection.ROW || direction == FlexDirection.ROW_REVERSE) {
+            parent?.layoutHeight?.isUndefined() == false && stretchCrossAxis
+        } else {
+            stretchMainAxis
+        }
+    }
+
+    private inline val FlexNode.stretchMainAxis: Boolean get() = flex != 0f
+
+    private inline val FlexNode.stretchCrossAxis: Boolean
+        get() = alignSelf == FlexAlign.STRETCH ||
+                (alignSelf == FlexAlign.AUTO && parent?.alignItems == FlexAlign.STRETCH)
+
+    internal fun markDirty() {
+        flexNode.markDirty()
+        shadow?.markDirty()
+    }
+
 }
 
-class TextAreaAttr : Attr() {
+open class TextAreaAttr : Attr() {
 
     internal var autofocus = false
 
@@ -115,8 +262,18 @@ class TextAreaAttr : Attr() {
         return this
     }
 
-    fun fontSize(size: Any): TextAreaAttr{
+    fun fontSize(size: Any): TextAreaAttr {
         TextConst.FONT_SIZE with size
+        return this
+    }
+
+    fun fontSize(size: Float, scaleFontSizeEnable: Boolean? = null): TextAreaAttr {
+        TextConst.FONT_SIZE with FontModule.scaleFontSize(size, scaleFontSizeEnable)
+        return this
+    }
+
+    fun lines(lines: Int): TextAreaAttr {
+        TextConst.LINES with lines
         return this
     }
 
@@ -155,18 +312,32 @@ class TextAreaAttr : Attr() {
         return this
     }
 
+    fun tintColor(color: Color): TextAreaAttr {
+        TextConst.TINT_COLOR with color.toString()
+        return this
+    }
+
     fun placeholderColor(color: Color): TextAreaAttr {
-        "placeholderColor" with color.toString()
+        TextConst.PLACEHOLDER_COLOR with color.toString()
         return this
     }
 
     fun placeholder(placeholder: String): TextAreaAttr {
-        "placeholder" with placeholder
+        TextConst.PLACEHOLDER with placeholder
         return this
     }
 
+    @Deprecated(
+        "Use maxTextLength(length: Int, type: LengthLimitType) instead",
+        ReplaceWith("maxTextLength(maxLength, LengthLimitType)")
+    )
     fun maxTextLength(maxLength: Int) {
         "maxTextLength" with maxLength
+    }
+
+    fun maxTextLength(length: Int, type: LengthLimitType) {
+        "lengthLimitType" with type.value
+        "maxTextLength" with length
     }
 
     fun keyboardTypePassword(): TextAreaAttr {
@@ -180,6 +351,10 @@ class TextAreaAttr : Attr() {
 
     fun keyboardTypeEmail() {
         KEYBOARD_TYPE with "email"
+    }
+
+    fun returnKeyTypeNone() {
+        RETURN_KEY_TYPE with "none"
     }
 
     fun returnKeyTypeSearch() {
@@ -210,6 +385,10 @@ class TextAreaAttr : Attr() {
         RETURN_KEY_TYPE with "google"
     }
 
+    fun returnKeyTypePrevious() {
+        RETURN_KEY_TYPE with "previous"
+    }
+
     fun autofocus(focus: Boolean) {
         autofocus = focus
     }
@@ -230,6 +409,41 @@ class TextAreaAttr : Attr() {
         return this
     }
 
+    fun lineHeight(lineHeight: Float): TextAreaAttr {
+        TextConst.LINE_HEIGHT with lineHeight
+        return this
+    }
+
+    /**
+     * 仅iOS支持
+     * 当设置为true的时候，输入框中如果是空的，则软键盘的Return Key会自动置灰禁用，非空的时候自动启用。
+     */
+    fun enablesReturnKeyAutomatically(flag: Boolean): TextAreaAttr{
+        ENABLES_RETURN_KEY_AUTOMATICALLY with if( flag ) 1 else 0
+        return this
+    }
+
+    /**
+     * 是否启用拼音输入回调
+     * @param enable 是否启用，默认为false
+     */
+    fun enablePinyinCallback(enable: Boolean = false): TextAreaAttr {
+        "enablePinyinCallback" with (if (enable) 1 else 0)
+        return this
+    }
+
+    /**
+     * 设置是否在点击 IME 动作按钮（如 Send/Go/Search）时自动收起键盘
+     *
+     * @param autoHide 是否自动收起键盘, 默认状态由三端各自的autoHideKeyboardOnImeAction决定
+     *                 - 若设置为true: 点击 Send 等按钮后自动收起键盘
+     *                 - 若设置为false: 点击 Send 等按钮后保持键盘打开，由业务自己控制
+     */
+    fun autoHideKeyboardOnImeAction(enable: Boolean): TextAreaAttr {
+        TextConst.AUTO_HIDE_KEYBOARD_ON_IME_ACTION with (if (enable) 1 else 0)
+        return this
+    }
+
     companion object {
         const val RETURN_KEY_TYPE = "returnKeyType"
         const val KEYBOARD_TYPE = "keyboardType"
@@ -238,7 +452,7 @@ class TextAreaAttr : Attr() {
 
 class InputSpans {
 
-    private val spans = fastArrayListOf<InputSpan>()
+    private val spans = fastMutableListOf<InputSpan>()
 
     fun addSpan(span: InputSpan): InputSpans {
         spans.add(span)
@@ -272,6 +486,7 @@ class InputSpans {
     }
 }
 
+@ScopeMarker
 class InputSpan {
     private val propMap = JSONObject()
 
@@ -305,12 +520,70 @@ class InputSpan {
         return this
     }
 
+    fun lineHeight(lineHeight: Float): InputSpan {
+        propMap.put(TextConst.LINE_HEIGHT, lineHeight)
+        return this
+    }
+
     internal fun toJSON(): JSONObject {
         return propMap
     }
 }
 
-class TextAreaEvent : Event() {
+open class TextAreaEvent : Event() {
+
+    private val syncTextDidChangeObservers = fastMutableListOf<InputEventHandlerFn>()
+    private var textDidChangeHandler: InputEventHandlerFn? = null
+    private var isSyncEdit = false
+
+    internal fun addTextDidChangeObserver(observer: InputEventHandlerFn) {
+        if (observer in syncTextDidChangeObservers) {
+            return
+        }
+        val empty = syncTextDidChangeObservers.isEmpty()
+        syncTextDidChangeObservers.add(observer)
+        if (empty) {
+            updateTextDidChangeInternal()
+        }
+    }
+
+    internal fun removeTextDidChangeObserver(observer: InputEventHandlerFn) {
+        if (observer !in syncTextDidChangeObservers) {
+            return
+        }
+        syncTextDidChangeObservers.remove(observer)
+        if (syncTextDidChangeObservers.isEmpty()) {
+            updateTextDidChangeInternal()
+        }
+    }
+
+    private fun updateTextDidChangeInternal() {
+        if (textDidChangeHandler == null && syncTextDidChangeObservers.isEmpty()) {
+            super.unRegister(TEXT_DID_CHANGE)
+        } else {
+            super.register(TEXT_DID_CHANGE, {
+                it as JSONObject
+                val text = it.optString("text")
+                val length = if (it.has("length")) it.optInt("length") else null
+                val params = InputParams(text, length = length)
+                syncTextDidChangeObservers.forEach { observer -> observer.invoke(params) }
+                textDidChangeHandler?.invoke(params)
+            }, isSync = isSyncEdit || syncTextDidChangeObservers.isNotEmpty())
+        }
+    }
+
+    override fun unRegister(eventName: String) {
+        if (eventName == TEXT_DID_CHANGE) {
+            if (textDidChangeHandler == null) {
+                return
+            }
+            textDidChangeHandler = null
+            isSyncEdit = false
+            updateTextDidChangeInternal()
+        } else {
+            super.unRegister(eventName)
+        }
+    }
 
     /**
      * 当文本发生变化时调用的方法
@@ -318,11 +591,12 @@ class TextAreaEvent : Event() {
      * @param handler 处理文本变化事件的回调函数
      */
     fun textDidChange(isSyncEdit: Boolean = false, handler: InputEventHandlerFn) {
-        this.register(TEXT_DID_CHANGE, {
-            it as JSONObject
-            val text = it.optString("text")
-            handler(InputParams(text))
-        }, isSync = isSyncEdit)
+        if (handler == this.textDidChangeHandler && isSyncEdit == this.isSyncEdit) {
+            return
+        }
+        this.isSyncEdit = isSyncEdit
+        this.textDidChangeHandler = handler
+        updateTextDidChangeInternal()
     }
 
     /**
@@ -349,16 +623,18 @@ class TextAreaEvent : Event() {
     }
 
     /**
-     * 当键盘高度发生变化时调用的方法
-     * @param handler 处理键盘高度变化事件的回调函数
+     * Called when keyboard height changes.
+     * @param isSync Sync callback to ensure UI animation syncs with keyboard, default true
+     * @param handler Callback handler with keyboard params
      */
-    fun keyboardHeightChange(handler: (KeyboardParams) -> Unit ) {
-        this.register(KEYBOARD_HEIGHT_CHANGE){
+    fun keyboardHeightChange(isSync: Boolean = true, handler: (KeyboardParams) -> Unit) {
+        this.register(KEYBOARD_HEIGHT_CHANGE, {
             it as JSONObject
             val height = it.optDouble("height").toFloat()
             val duration = it.optDouble("duration").toFloat()
-            handler(KeyboardParams(height, duration))
-        }
+            val curve = it.optInt("curve")
+            handler(KeyboardParams(height, duration, curve))
+        }, isSync = isSync)
     }
     /**
      * 当文本长度超过限制时调用的方法(即输入长度超过attr.maxTextLength属性设置的长度)
@@ -368,6 +644,40 @@ class TextAreaEvent : Event() {
         this.register(TEXT_LENGTH_BEYOND_LIMIT,handler)
     }
 
+    /**
+     * 当用户按下return键时调用的方法
+     * @param handler 处理用户按下return键事件的回调函数
+     */
+    fun inputReturn(handler: InputEventHandlerFn) {
+        register(INPUT_RETURN){
+            it as JSONObject
+            val text = it.optString("text")
+            val imeAction = it.optString("ime_action").ifEmpty {
+                getView()?.getViewAttr()?.getProp(InputAttr.RETURN_KEY_TYPE) as? String ?: ""
+            }
+            handler(InputParams(text, imeAction))
+        }
+    }
+
+    /**
+     * 当用户按下键盘IME动作按键是回调，例如 Send / Go / Search 等
+     * @param handler 用户按下对应按键时的回调函数
+     */
+    @Deprecated("Use inputReturn instead", ReplaceWith("inputReturn { (_, it) -> handler(it) }"))
+    fun onIMEAction(handler: IMEActionEventHandlerFn) {
+        register(IME_ACTION){
+            it as JSONObject
+            val imeAction = it.optString("ime_action")
+            handler(imeAction)
+        }
+    }
+
+    override fun onViewDidRemove() {
+        super.onViewDidRemove()
+        syncTextDidChangeObservers.clear()
+        textDidChangeHandler = null
+        isSyncEdit = false
+    }
 
     companion object {
         const val TEXT_DID_CHANGE = "textDidChange"
@@ -375,9 +685,12 @@ class TextAreaEvent : Event() {
         const val INPUT_BLUR = "inputBlur"
         const val KEYBOARD_HEIGHT_CHANGE = "keyboardHeightChange"
         const val TEXT_LENGTH_BEYOND_LIMIT = "textLengthBeyondLimit"
+        const val IME_ACTION = "imeAction"
     }
 }
 
 fun ViewContainer<*, *>.TextArea(init: TextAreaView.() -> Unit) {
     addChild(TextAreaView(), init)
 }
+
+typealias IMEActionEventHandlerFn = (imeAction: String) -> Unit

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,23 +15,23 @@
 
 package com.tencent.kuikly.core.directives
 
-import com.tencent.kuikly.core.base.*
-import com.tencent.kuikly.core.collection.fastArrayListOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
+import com.tencent.kuikly.core.base.DeclarativeBaseView
+import com.tencent.kuikly.core.base.ViewContainer
+import com.tencent.kuikly.core.base.domChildren
+import com.tencent.kuikly.core.base.isVirtualView
 import com.tencent.kuikly.core.collection.toFastList
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.log.KLog
 import com.tencent.kuikly.core.reactive.ReactiveObserver
 import com.tencent.kuikly.core.reactive.collection.CollectionOperation
 import com.tencent.kuikly.core.reactive.collection.ObservableList
-import com.tencent.kuikly.core.timer.setTimeout
 import com.tencent.kuikly.core.views.ListContentView
 import com.tencent.kuikly.core.views.ListView
-import com.tencent.kuikly.core.views.RefreshView
 
 /**
  * 循环指令标签节点, 如vfor模板指令
  */
-
 class LoopDirectivesView<T>(
     private val itemList: VItemList<T>,
     private val itemCreator: VItemIndexCreator<T>,
@@ -39,7 +39,8 @@ class LoopDirectivesView<T>(
 ) :
     DirectivesView() {
     lateinit var curList: ObservableList<T>
-    internal var lazySyncOperation : (LoopDirectivesView<*>.() -> Unit)? = null
+    internal var lastProcessedSeq = -1
+    internal var lazySyncOperation: (LoopDirectivesView<*>.() -> Unit)? = null
     internal var didRemove = false
 
     override fun didInit() {
@@ -54,15 +55,19 @@ class LoopDirectivesView<T>(
                         val removeAllOperation = CollectionOperation(CollectionOperation.OPERATION_TYPE_REMOVE, 0, curList.count())
                         syncRemoveChildOperationToDom(removeAllOperation)
                         curList = list
+                        lastProcessedSeq = list.collectionOperation.lastOrNull()?.seq ?: -1
                         val addAllOperation = CollectionOperation(CollectionOperation.OPERATION_TYPE_ADD, 0, curList.count())
                         syncAddChildOperationToDom(addAllOperation, itemList())
                     }
-                }  else {
+                } else {
                     val collectionOperation = list.collectionOperation.toFastList()
                     ReactiveObserver.addLazyTaskUtilEndCollectDependency {
                         if (collectionOperation.isNotEmpty()) {
                             collectionOperation.forEach { operation ->
-                                syncListOperationToDom(operation)
+                                if (operation.seq > lastProcessedSeq) {
+                                    syncListOperationToDom(operation)
+                                    lastProcessedSeq = operation.seq
+                                }
                             }
                         }
                     }
@@ -79,7 +84,6 @@ class LoopDirectivesView<T>(
         lazySyncOperation = null
     }
 
-
     private fun syncListOperationToDom(operation: CollectionOperation) {
         if (realParent === null) {
             return
@@ -92,7 +96,7 @@ class LoopDirectivesView<T>(
     }
 
     internal fun syncAddChildOperationToDom(operation: CollectionOperation, list: List<T>) {
-        val addedChildren = fastArrayListOf<DeclarativeBaseView<*, *>>()
+        val addedChildren = fastMutableListOf<DeclarativeBaseView<*, *>>()
         var index = operation.index
         val size = list.size
         while (index < operation.index + operation.count) {
@@ -101,9 +105,14 @@ class LoopDirectivesView<T>(
                 break
             }
             val item = list[index]
-            val child = createChildView(item, index, size)
-            children.add(index, child)
-            addedChildren.add(child)
+            invokeItemCreator(item, index, size, itemCreator)
+            if (index != children.lastIndex) {
+                val child = children.removeAt(children.lastIndex)
+                children.add(index, child)
+                addedChildren.add(child)
+            } else {
+                addedChildren.add(children.last())
+            }
             index++
         }
         realParent?.also { parent ->
@@ -115,11 +124,9 @@ class LoopDirectivesView<T>(
         }
     }
 
-
-
     private fun syncRemoveChildOperationToDom(operation: CollectionOperation) {
         var index = operation.index
-        val removedChildren = fastArrayListOf<DeclarativeBaseView<*, *>>()
+        val removedChildren = fastMutableListOf<DeclarativeBaseView<*, *>>()
         while (index < operation.index + operation.count) {
             if (!(index < children.size && index >= 0)) {
                 KLog.e("KuiklyError", "sync remove operation out index with index:${index} listSize:${children.size} oIndex:${operation.index} oSize:${operation.count} ")
@@ -137,21 +144,6 @@ class LoopDirectivesView<T>(
 
     }
 
-
-    private fun createChildView(item: T, index: Int, size: Int): DeclarativeBaseView<*, *> {
-        val beforeChildrenSize = children.count()
-        itemCreator(item, index, size)
-        if (children.count() - beforeChildrenSize != 1) {
-            throwRuntimeError("vfor creator闭包内必须需要且仅一个孩子节点的生成")
-        }
-        val child = children.last()
-        if (child.isVirtualView()) {
-            throwRuntimeError("vfor creator闭包内子孩子必须为非条件指令，如vif , vfor")
-        }
-        children.remove(child)
-        return child
-    }
-
     internal fun performLazySyncOperationIfNeed() {
         if (!didRemove && lazySyncOperation != null) {
             lazySyncOperation?.invoke(this)
@@ -161,7 +153,23 @@ class LoopDirectivesView<T>(
 
 }
 
-
+private fun <T> LoopDirectivesView<T>.invokeItemCreator(
+    item: T,
+    index: Int,
+    size: Int,
+    itemCreator: VItemIndexCreator<T>
+) {
+    val beforeChildrenSize = childrenSize()
+    itemCreator(item, index, size)
+    val currentChildrenSize = childrenSize()
+    if (childrenSize() - beforeChildrenSize != 1) {
+        throwRuntimeError("vfor creator闭包内必须需要且仅一个孩子节点的生成")
+    }
+    val child = getChild(currentChildrenSize - 1)
+    if (child.isVirtualView()) {
+        throwRuntimeError("vfor creator闭包内子孩子必须为非条件指令，如vif , vfor")
+    }
+}
 
 fun <T> ViewContainer<*, *>.vforIndex(
     itemList: VItemList<T>,
@@ -170,6 +178,7 @@ fun <T> ViewContainer<*, *>.vforIndex(
     val view = LoopDirectivesView<T>(itemList, itemCreator)
     addChild(view) {
         curList = itemList()
+        lastProcessedSeq = curList.collectionOperation.lastOrNull()?.seq ?: -1
         if (realParent is ListContentView) { // list首屏分帧加载
             val list = curList.toFastList()
             val contentView = realParent as ListContentView
@@ -177,7 +186,7 @@ fun <T> ViewContainer<*, *>.vforIndex(
             if (maxIndex > 0 && list.count() > maxIndex) {
                 val size = list.size
                 list.subList(0, maxIndex).forEachIndexed { index, item ->
-                    itemCreator(item, index, size)
+                    invokeItemCreator(item, index, size, itemCreator)
                 }
                 lazySyncOperation = {
                     val addAllOperation = CollectionOperation(CollectionOperation.OPERATION_TYPE_ADD, maxIndex, list.count() - maxIndex)
@@ -191,21 +200,20 @@ fun <T> ViewContainer<*, *>.vforIndex(
         }
         val size = curList.size
         curList.forEachIndexed { index, item ->
-            itemCreator(item, index, size)
+            invokeItemCreator(item, index, size, itemCreator)
         }
     }
 }
-fun <T> ViewContainer<*, *>.vfor(
-    itemList: VItemList<T>,
-    itemCreator: VItemCreator<T>
+
+inline fun <T> ViewContainer<*, *>.vfor(
+    noinline itemList: VItemList<T>,
+    crossinline itemCreator: VItemCreator<T>
 ) {
-   vforIndex(itemList) { item, index, count ->
-       itemCreator(item)
-   }
+    vforIndex(itemList) { item, _, _ ->
+        itemCreator(item)
+    }
 }
 
 typealias VItemList<T> = () -> ObservableList<T>
 typealias VItemCreator<T> = LoopDirectivesView<T>.(item: T) -> Unit
 typealias VItemIndexCreator<T> = LoopDirectivesView<T>.(item: T, index: Int, count: Int) -> Unit
-
-

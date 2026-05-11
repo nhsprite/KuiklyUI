@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,22 +22,24 @@ import android.util.SizeF
 import android.util.SparseArray
 import android.view.View
 import android.view.View.OnLayoutChangeListener
+import android.view.ViewGroup
 import com.tencent.kuikly.core.render.android.IKuiklyRenderView
+import com.tencent.kuikly.core.render.android.KuiklyRenderView
+import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderLog
 import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.ktx.isMainThread
-import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
-import com.tencent.kuikly.core.render.android.export.IKuiklyRenderModuleExport
-import com.tencent.kuikly.core.render.android.export.IKuiklyRenderShadowExport
-import com.tencent.kuikly.core.render.android.export.IKuiklyRenderViewExport
 import com.tencent.kuikly.core.render.android.css.ktx.removeFromParent
-import com.tencent.kuikly.core.render.android.css.ktx.viewGroup
 import com.tencent.kuikly.core.render.android.css.ktx.toDpSizeF
 import com.tencent.kuikly.core.render.android.css.ktx.toPxI
 import com.tencent.kuikly.core.render.android.css.ktx.toPxSizeF
 import com.tencent.kuikly.core.render.android.css.ktx.toTDFModuleCallResult
+import com.tencent.kuikly.core.render.android.css.ktx.viewGroup
 import com.tencent.kuikly.core.render.android.expand.module.KRTDFModulePromise
+import com.tencent.kuikly.core.render.android.export.IKuiklyRenderModuleExport
+import com.tencent.kuikly.core.render.android.export.IKuiklyRenderShadowExport
+import com.tencent.kuikly.core.render.android.export.IKuiklyRenderViewExport
+import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import com.tencent.tdf.module.TDFBaseModule
-import com.tencent.tdf.module.TDFModulePromise
 import com.tencent.tdf.utils.TDFListUtils
 import java.lang.ref.WeakReference
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -74,8 +76,15 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
      */
     private val renderViewReuseListMap = ArrayMap<String, MutableList<RenderViewHandler>>()
 
+
+    /**
+     * 是否开启debug日志
+     */
+    private var debugLogEnable = false
+
     override fun init(renderView: IKuiklyRenderView) {
         renderViewWeakRef = WeakReference(renderView)
+        debugLogEnable = renderViewWeakRef?.get()?.isDebugLogEnable() ?: false
     }
 
     override fun createRenderView(tag: Int, viewName: String) {
@@ -134,6 +143,8 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
             if (it.reusable && process) {
                 recordSetPropOperation(it.view(), propKey)
             }
+        } ?: run {
+            KuiklyRenderLog.d("KuiklyRenderTracer", "setProp viewHandler is null, tag=$tag")
         }
     }
 
@@ -144,15 +155,22 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
         getRenderViewHandler(tag)?.viewExport?.setShadow(shadow)
     }
 
+    private var logSetFrameCount = 0
+
     override fun setRenderViewFrame(tag: Int, frame: RectF) {
+        if (debugLogEnable && logSetFrameCount < SET_RENDER_VIEW_FRAME_MAX_LOG_COUNT) {
+            KuiklyRenderLog.d("KuiklyRenderTracer", "setRenderViewFrame $logSetFrameCount tag=$tag frame=[${frame.left}, ${frame.top}, ${frame.right}, ${frame.bottom}]")
+            logSetFrameCount++
+        }
         assert(isMainThread()) {
             "must call on ui thread"
         }
+        val kuiklyContext = renderViewWeakRef?.get()?.kuiklyRenderContext
         setProp(tag, KRCssConst.FRAME, Rect().apply {
-            left = frame.left.toPxI()
-            top = frame.top.toPxI()
-            right = frame.right.toPxI()
-            bottom = frame.bottom.toPxI()
+            left = kuiklyContext.toPxI(frame.left)
+            top = kuiklyContext.toPxI(frame.top)
+            right = kuiklyContext.toPxI(frame.right)
+            bottom = kuiklyContext.toPxI(frame.bottom)
         })
     }
 
@@ -163,8 +181,13 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
 
         val shadowHandler = getShadowHandler(tag)
         assertShadowHandlerNotNull(shadowHandler)
-        return shadowHandler?.calculateRenderViewSize(constraintSize.toPxSizeF())
-            ?.toDpSizeF() ?: return constraintSize
+        val kuiklyContext = renderViewWeakRef?.get()?.kuiklyRenderContext
+        val pxSizeF = kuiklyContext.toPxSizeF(constraintSize)
+        return if (shadowHandler != null) {
+            kuiklyContext.toDpSizeF(shadowHandler.calculateRenderViewSize(pxSizeF))
+        } else {
+            constraintSize
+        }
     }
 
     override fun callViewMethod(
@@ -258,7 +281,6 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
             renderViewRegistry.valueAt(i).viewExport.onDestroy()
         }
     }
-
     private fun getRenderViewHandler(tag: Int): RenderViewHandler? {
         assert(isMainThread()) {
             "must call on ui thread"
@@ -394,6 +416,7 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
                 }
             }
         }
+        viewExport.resetClipChildren()
         viewExport.resetShadow()
     }
 
@@ -404,10 +427,11 @@ class KuiklyRenderLayerHandler : IKuiklyRenderLayerHandler {
     }
 
     companion object {
-        private const val ROOT_VIEW_TAG = -1
-        private const val HR_SET_PROP_OPERATION = "hr_set_prop_operation"
+        const val ROOT_VIEW_TAG = -1
+        internal const val HR_SET_PROP_OPERATION = "hr_set_prop_operation"
         private const val MAX_REUSE_COUNT = 50
         private const val TDF_METHOD_PARAMS_KEY = "result"
+        private const val SET_RENDER_VIEW_FRAME_MAX_LOG_COUNT = 10
     }
 }
 
@@ -419,24 +443,34 @@ data class RenderViewHandler(
     val viewExport: IKuiklyRenderViewExport
 ) {
     init {
-        viewExport.viewGroup?.also {
-            it.addOnLayoutChangeListener(object : OnLayoutChangeListener {
-                override fun onLayoutChange(
-                    v: View?,
-                    left: Int,
-                    top: Int,
-                    right: Int,
-                    bottom: Int,
-                    oldLeft: Int,
-                    oldTop: Int,
-                    oldRight: Int,
-                    oldBottom: Int
-                ) {
-                    it.clipChildren = false // 全部View不裁剪
-                    it.removeOnLayoutChangeListener(this)
-                }
+        viewExport.view().apply {
+            if (layoutParams == null) {
+                layoutParams = ViewGroup.LayoutParams(0, 0)
+            } else {
+                layoutParams.width = 0
+                layoutParams.height = 0
+            }
+        }
+        if (!KuiklyRenderView.lazyClipChildren) {
+            viewExport.viewGroup?.also {
+                it.addOnLayoutChangeListener(object : OnLayoutChangeListener {
+                    override fun onLayoutChange(
+                        v: View?,
+                        left: Int,
+                        top: Int,
+                        right: Int,
+                        bottom: Int,
+                        oldLeft: Int,
+                        oldTop: Int,
+                        oldRight: Int,
+                        oldBottom: Int
+                    ) {
+                        it.clipChildren = false // 全部View不裁剪
+                        it.removeOnLayoutChangeListener(this)
+                    }
 
-            })
+                })
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import com.tencent.kuikly.core.collection.fastHashMapOf
 import com.tencent.kuikly.core.collection.fastHashSetOf
 import com.tencent.kuikly.core.collection.toFastList
 import com.tencent.kuikly.core.coroutines.LifecycleScope
+import com.tencent.kuikly.core.datetime.DateTime
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.global.GlobalFunctions
 import com.tencent.kuikly.core.log.KLog
@@ -31,8 +32,11 @@ import com.tencent.kuikly.core.manager.TaskManager
 import com.tencent.kuikly.core.module.*
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import com.tencent.kuikly.core.timer.setTimeout
+import com.tencent.kuikly.core.utils.verifyFailedHandler
+import kotlin.math.roundToInt
 
 abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
+    open var ignoreLayout: Boolean = false
     private var fontWeightScale = -1.0
     private var fontSizeScale = -1.0
 
@@ -42,9 +46,11 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
         fastHashMapOf<String, IViewCreator>()
     }
     private val nativeRefViewMap = fastHashMapOf<Int, AbstractBaseView<*, *>>()
-    override var pageData = PageData()
+    override var pageData = PageData(this)
     override var pageName: String = ""
-    override val lifecycleScope: LifecycleScope by lazy(LazyThreadSafetyMode.NONE) { LifecycleScope() }
+    override val lifecycleScope: LifecycleScope by lazy(LazyThreadSafetyMode.NONE) {
+        LifecycleScope(this)
+    }
     override var animationManager: AnimationManager? = null
     private var pagerEventObserverSet = fastHashSetOf<IPagerEventObserver>()
     private var layoutEventObserverSet = fastHashSetOf<IPagerLayoutEventObserver>()
@@ -55,8 +61,13 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
     private var willDestroy = false
     private var pageTrace : PageCreateTrace? = null
     override val isDebugUIInspector by lazy { debugUIInspector() } // debug ui
-    var didCreateBody: Boolean = false
+    override var didCreateBody: Boolean = false
+    final override var isAppeared: Boolean = false
         private set
+    private val innerBackPressHandler: BackPressHandler by lazy(LazyThreadSafetyMode.NONE) {
+        BackPressHandler()
+    }
+    override var pageLayoutTracer = PageLayoutTracer()
 
     override fun createAttr(): ComposeAttr = ComposeAttr()
 
@@ -209,14 +220,21 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
             observer.onPagerEvent(pagerEvent, eventData)
         }
         when (pagerEvent) {
-            PAGER_EVENT_DID_APPEAR -> pageDidAppear()
-            PAGER_EVENT_DID_DISAPPEAR -> pageDidDisappear()
+            PAGER_EVENT_DID_APPEAR -> {
+                isAppeared = true
+                pageDidAppear()
+            }
+            PAGER_EVENT_DID_DISAPPEAR -> {
+                isAppeared = false
+                pageDidDisappear()
+            }
             PAGER_EVENT_THEME_DID_CHANGED -> themeDidChanged(eventData)
             PAGER_EVENT_FIRST_FRAME_PAINT -> {
                 onFirstFramePaint()
             }
             PAGER_EVENT_ROOT_VIEW_SIZE_CHANGED -> {
                 handlePagerViewSizeDidChanged(
+                    eventData,
                     eventData.optDouble(WIDTH),
                     eventData.optDouble(HEIGHT),
                     eventData.optString(SAFE_AREA_INSETS, ""),
@@ -225,10 +243,22 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
             }
             PAGER_EVENT_WINDOW_SIZE_CHANGED -> {
                 handlePagerWindowSizeDidChanged(eventData.optDouble(WIDTH),eventData.optDouble(
-                    HEIGHT));
+                    HEIGHT))
             }
             PAGER_EVENT_CONFIGURATION_DID_CHANGED -> {
                 handlePagerConfigurationDidchanged(eventData)
+            }
+            PAGER_EVENT_ON_BACK_PRESSED -> {
+                val hasCallbacks = getBackPressHandler().backPressCallbackList.isNotEmpty()
+                acquireModule<BackPressModule>(BackPressModule.MODULE_NAME).backHandle(isConsumed = hasCallbacks)
+                this@Pager.setTimeout {
+                    getBackPressHandler().dispatchOnBackEvent()
+                }
+            }
+            PAGER_EVENT_ON_FONT_LOADED -> {
+                flexNode.markDirty()
+                markChildTextViewsDirty()
+                layoutIfNeed()
             }
         }
     }
@@ -279,7 +309,7 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
     }
 
     private fun injectVarToModule(module: Module) {
-        module.injectVar(pagerId, pageData)
+        module.injectVar(pagerId, pageData, pageTrace)
     }
 
     private fun createModuleIfNeed(name: String) {
@@ -350,7 +380,28 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
                 return TurboDisplayModule()
             }
         })
+        registerModule(ModuleConst.FONT, object : IModuleCreator {
+            override fun createModule(): Module {
+                return FontModule()
+            }
+        })
+        registerModule(ModuleConst.VSYNC, object : IModuleCreator {
+            override fun createModule(): Module {
+                return VsyncModule()
+            }
+        })
+        registerModule(ModuleConst.BACK_PRESS, object : IModuleCreator {
+            override fun createModule(): Module {
+                return BackPressModule()
+            }
+        })
+        registerModule(ModuleConst.FILE, object : IModuleCreator {
+            override fun createModule(): Module {
+                return FileModule()
+            }
+        })
     }
+
     private fun initExternalModules() {
         createExternalModules()?.also { map ->
             modulesMap.putAll(map)
@@ -370,6 +421,14 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
     }
 
     private fun layoutIfNeed() {
+        if (ignoreLayout) {
+            return
+        }
+        pageTrace?.pageEventTrace?.onLayoutStart()
+        val shouldTraceLayout = isDebugLogEnable() && pageLayoutTracer.needLogLayout() && flexNode.isDirty
+        if (shouldTraceLayout) {
+            pageLayoutTracer.layoutStart()
+        }
         var maxLoopTimes = 3
         while (flexNode.isDirty && (--maxLoopTimes) >= 0) {
             notifyPagerWillCalculateLayoutObservers()
@@ -384,6 +443,12 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
                 layoutIfNeed()
             }
         }
+
+        if (shouldTraceLayout) {
+            pageLayoutTracer.layoutFinish(flexNode.isDirty)
+            dump(this)
+        }
+        pageTrace?.pageEventTrace?.onLayoutEnd(flexNode.nodeCount())
     }
 
     private fun performTask(async: Boolean, task: () -> Unit) {
@@ -432,7 +497,7 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
         pageTrace?.onBuildStart()
         super<ComposeView>.didInit()
         setupRootViewSizeStyle()
-        pageTrace?.onBuildEnd()
+        pageTrace?.onBuildEnd(flexNode.nodeCount())
     }
 
     override fun isWillDestroy(): Boolean {
@@ -440,7 +505,13 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
     }
 
     override fun setPageTrace(pageTrace: PageCreateTrace) {
+        if (isDebugLogEnable()){
+            pageTrace.createPageEventTraceIfNeeded()
+        }
         this.pageTrace = pageTrace
+    }
+    override fun getPageTrace() : PageCreateTrace?{
+        return this.pageTrace
     }
 
     private fun setupRootViewSizeStyle() {
@@ -485,17 +556,12 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
     }
 
     // pager event
-    private fun handlePagerViewSizeDidChanged(width: Double, height: Double, safeAreaInsetsString: String, densityInfo: String) {
+    private fun handlePagerViewSizeDidChanged(data: JSONObject, width: Double, height: Double, safeAreaInsetsString: String, densityInfo: String) {
         if (safeAreaInsetsString.isNotEmpty()) {
             pageData.safeAreaInsets = EdgeInsets.decodeWithString(safeAreaInsetsString)
         }
-        if (width.toFloat() != pageData.pageViewWidth
-            || height.toFloat() != pageData.pageViewHeight
-        ) {
-            pageData.pageViewWidth = width.toFloat()
-            pageData.pageViewHeight = height.toFloat()
-            setupRootViewSizeStyle()
-        }
+        pageData.updateRootViewSize(data, width, height)
+        setupRootViewSizeStyle()
         if(densityInfo.isNotEmpty()) {
             val info = JSONObject(densityInfo)
             val newDensity = info.optDouble(DENSITY_INFO_KEY_NEW_DENSITY)
@@ -506,6 +572,10 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
         }
     }
 
+    open fun getBackPressHandler(): BackPressHandler {
+        return innerBackPressHandler
+    }
+
     companion object {
         const val PAGER_EVENT_WINDOW_SIZE_CHANGED = "windowSizeDidChanged"
         const val PAGER_EVENT_ROOT_VIEW_SIZE_CHANGED = "rootViewSizeDidChanged"
@@ -513,13 +583,63 @@ abstract class Pager : ComposeView<ComposeAttr, ComposeEvent>(), IPager {
         const val PAGER_EVENT_DID_DISAPPEAR = "viewDidDisappear"
         const val PAGER_EVENT_FIRST_FRAME_PAINT = "pageFirstFramePaint"
         const val PAGER_EVENT_THEME_DID_CHANGED = "themeDidChanged"
+        const val PAGER_EVENT_WILL_DESTROY = "pageWillDestroy"
         const val PAGER_EVENT_SET_NEED_LAYOUT = "setNeedLayout"
         const val PAGER_EVENT_CONFIGURATION_DID_CHANGED = "configurationDidChanged"
+
+        const val PAGER_EVENT_ON_BACK_PRESSED = "onBackPressed"
+        const val PAGER_EVENT_ON_FONT_LOADED = "onFontLoaded"
+
         const val WIDTH = "width"
         const val HEIGHT = "height"
         const val SAFE_AREA_INSETS = "safeAreaInsets"
         const val DENSITY_INFO = "densityInfo"
         const val DENSITY_INFO_KEY_NEW_DENSITY = "newDensity"
+
+        var VERIFY_THREAD
+            get() = com.tencent.kuikly.core.utils.VERIFY_THREAD
+            set(value) {
+                com.tencent.kuikly.core.utils.VERIFY_THREAD = value
+            }
+        var VERIFY_REACTIVE_OBSERVER
+            get() = com.tencent.kuikly.core.utils.VERIFY_REACTIVE_OBSERVER
+            set(value) {
+                com.tencent.kuikly.core.utils.VERIFY_REACTIVE_OBSERVER = value
+            }
+        fun verifyFailed(handler: (RuntimeException) -> Unit) {
+            verifyFailedHandler = handler
+        }
+
+
+        private fun dump(root: Pager) {
+            val startTime = DateTime.currentTimestamp()
+            val dumpInfo = root.toDumpInfo()
+            KLog.d("KuiklyCoreTracer", "dump pager ${root.pagerId} ${root.pageName} at ${DateTime.currentTimestamp()} cost=${DateTime.currentTimestamp() - startTime}\n$dumpInfo")
+        }
+
+        private fun DeclarativeBaseView<*, *>.toDumpInfo(indent: String = "", depth: Int = 0): String {
+            val childCount = if (this is ViewContainer) this.childrenSize() else null
+            return "$indent${this::class.simpleName}[${this.nativeRef} " +
+                    frame.let { "${it.x.roundToInt()},${it.y.roundToInt()}-${it.maxX().roundToInt()},${it.maxY().roundToInt()} " } +
+                    (if (this.isVirtualView()) "v" else if (this.isRenderView()) (if (this.renderView == null) "r" else "R") else "-") +
+                    (childCount ?: "-") +
+                    getViewAttr().let {
+                        "|${it.getProp(Attr.StyleConst.OPACITY) ?: "-"}|${it.getProp(Attr.StyleConst.VISIBILITY) ?: "-"}|${it.getProp(Attr.StyleConst.BACKGROUND_COLOR) ?: "-"}"
+                    } +
+                    if (childCount != null && childCount > 0) {
+                        if (depth < 4) {
+                            (this as ViewContainer).childrenToDump()
+                                .joinToString("", prefix = "]{\n", postfix = "$indent}\n") {
+                                    it.toDumpInfo("$indent  ", depth + 1)
+                                }
+                        } else {
+                            "]{…}\n"
+                        }
+                    } else {
+                        "]\n"
+                    }
+        }
+
     }
 }
 
@@ -530,4 +650,63 @@ interface IModuleCreator {
 // 定义一个视图创建器接口
 interface IViewCreator {
     fun createView(): DeclarativeBaseView<*, *>
+}
+
+/**
+ * 用于跟踪页面布局信息的工具类
+ */
+class PageLayoutTracer {
+    private var isLayout = false
+    private var shadowCount = 0
+    private var layoutCount = 0
+    private var wallTime = 0L
+    private var threadTime = 0L
+    private var shadowWallTime = 0L
+    private var shadowThreadTime = 0L
+    private var totalShadowWallTime = 0L
+    private var totalShadowThreadTime = 0L
+
+    fun layoutStart() {
+        wallTime = DateTime.currentTimestamp()
+        threadTime = DateTime.threadLocalTimestamp()
+        isLayout = true
+    }
+
+    fun layoutFinish(isDirty: Boolean = false) {
+        KLog.d("KuiklyCoreTracer", "layout[${layoutCount}]: wallCost=${DateTime.currentTimestamp() - wallTime}, threadCost=${DateTime.threadLocalTimestamp() - threadTime}, textWallTime=${totalShadowWallTime}, textThreadTime=${totalShadowThreadTime}, textCount=${shadowCount}, isDirty=${isDirty}")
+        wallTime = 0L
+        threadTime = 0L
+        totalShadowWallTime = 0L
+        totalShadowThreadTime = 0L
+        shadowCount = 0
+        layoutCount++
+        isLayout = false
+    }
+
+    fun shadowCalculateStart() {
+        if (!isLayout || !needLogLayout()) {
+            return
+        }
+        shadowWallTime = DateTime.currentTimestamp()
+        shadowThreadTime = DateTime.threadLocalTimestamp()
+        shadowCount++
+    }
+
+    fun shadowCalculateFinish() {
+        if (!isLayout || !needLogLayout()) {
+            return
+        }
+        totalShadowWallTime += DateTime.currentTimestamp() - shadowWallTime
+        totalShadowThreadTime = DateTime.threadLocalTimestamp() - shadowThreadTime
+        shadowWallTime = 0L
+        shadowThreadTime = 0L
+    }
+
+    fun needLogLayout(): Boolean {
+        return layoutCount < LAYOUT_MAX_LOG_COUNT
+    }
+
+    companion object {
+        private const val LAYOUT_MAX_LOG_COUNT = 5
+    }
 }

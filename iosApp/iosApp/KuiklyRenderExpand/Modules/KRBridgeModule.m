@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -73,8 +73,6 @@
     NSMutableArray *aaray =  args[KR_PARAM_KEY];
     KuiklyRenderCallback callback = args[KR_CALLBACK_KEY];
     if ([aaray isKindOfClass:[NSArray class]]) {
-        int coud = aaray.count;
-        id dds = aaray[0];
         id dd = aaray[1];
         if ([dd isKindOfClass:[NSData class]]) {
             callback(@[@"343434", dd, @"33434"]);
@@ -113,7 +111,7 @@
     NSString *path = params[@"assetPath"];
     KuiklyContextParam *contextParam = ((KuiklyRenderView *)self.hr_rootView).contextParam;
     NSURL *pathUrl = nil;
-    pathUrl = [contextParam.contextMode urlForFileName:[path stringByDeletingPathExtension] extension:[path pathExtension]];
+    pathUrl = [contextParam urlForFileName:[path stringByDeletingPathExtension] extension:[path pathExtension]];
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         NSError *error;
         NSString *jsonStr = [NSString stringWithContentsOfURL:pathUrl encoding:NSUTF8StringEncoding error:&error];

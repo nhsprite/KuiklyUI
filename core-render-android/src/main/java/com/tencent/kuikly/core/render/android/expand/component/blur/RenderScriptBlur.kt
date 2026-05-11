@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -46,6 +46,16 @@ class RenderScriptBlur(context: Context) : IBlur {
     private var hadDestroy = false
 
     override fun blur(bitmap: Bitmap, radius: Float): Bitmap {
+        // rs要求半径在(0 < r <= 25)
+        // 1.5f为放大系数，用于对齐ScriptBlur与EffectBlur的模糊半径效果
+        val r = (radius * 1.5f).let { scaledRadius ->
+            if (scaledRadius <= 0f) {
+                return bitmap
+            } else {
+                scaledRadius.coerceAtMost(25f)
+            }
+        }
+
         val allocation = Allocation.createFromBitmap(renderScript, bitmap)
         if (!canReuseAllocation(bitmap)) {
             outAllocation?.destroy()
@@ -54,14 +64,6 @@ class RenderScriptBlur(context: Context) : IBlur {
             lastBitmapHeight = bitmap.height
         }
 
-        // rs要求半径在(0 < r <= 25)
-        val r = if (radius <= 0) {
-            1f
-        } else if (radius > 25f) {
-            25f
-        } else {
-            radius
-        }
         try {
             blurScript.setRadius(r)
             blurScript.setInput(allocation)
@@ -130,9 +132,8 @@ class RenderScriptBlur(context: Context) : IBlur {
             val output = Allocation.createTyped(rs, input.type)
             val script = ScriptIntrinsicBlur.create(rs,  Element.U8_4(rs))
 
-            val reBlurCount = if (blurRadius == 12.5f) 5 else 3;
+            val reBlurCount = if (blurRadius == 12.5f) 5 else 3
             val nBlurRadius = min(25f, max(0f,blurRadius / 12.5f * 25f))
-
 
             for (i in 0..reBlurCount) {
                 input.copyFrom(resizedBitmap)

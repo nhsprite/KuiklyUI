@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,7 +16,7 @@
 package com.tencent.kuikly.core.module
 
 import com.tencent.kuikly.core.base.toInt
-import com.tencent.kuikly.core.collection.fastArrayListOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.global.GlobalFunctionRef
 import com.tencent.kuikly.core.global.GlobalFunctions
@@ -24,6 +24,7 @@ import com.tencent.kuikly.core.manager.BridgeManager
 import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import com.tencent.kuikly.core.nvi.serialization.serialization
+import com.tencent.kuikly.core.pager.PageCreateTrace
 import com.tencent.kuikly.core.pager.PageData
 
 /*
@@ -32,6 +33,7 @@ import com.tencent.kuikly.core.pager.PageData
 abstract class Module {
     var pagerId: String = ""
     var pageData: PageData? = null
+    var pageTrace: PageCreateTrace? = null
 
     abstract fun moduleName(): String
     class ReturnValue(val callbackRef: CallbackRef?, val returnValue: Any? = null, errorCallbackRef: CallbackRef? = null) {
@@ -45,9 +47,10 @@ abstract class Module {
         }
     }
 
-    internal fun injectVar(pagerId: String, pageData: PageData) {
+    internal fun injectVar(pagerId: String, pageData: PageData, pageTrace: PageCreateTrace?) {
         this.pagerId = pagerId
         this.pageData = pageData
+        this.pageTrace = pageTrace
     }
 
     /*
@@ -83,7 +86,7 @@ abstract class Module {
         callbackFn: AnyCallbackFn?
     ): Any? {
         // 转成平台数据结构
-        val argsValue = fastArrayListOf<Any>()
+        val argsValue = fastMutableListOf<Any>()
         args.forEach {
             if (it is String || it is Int || it is Float || it is ByteArray) {
                 argsValue.add(it.toPlatformObject())
@@ -127,7 +130,7 @@ abstract class Module {
         callbackFn: AnyCallbackFn?
     ) {
         // 转成平台数据结构
-        val argsValue = fastArrayListOf<Any>()
+        val argsValue = fastMutableListOf<Any>()
         args.forEach {
             argsValue.add(it.toPlatformObject())
         }
@@ -207,8 +210,6 @@ abstract class Module {
         return null
     }
 
-
-
     /**
      * 通用的与Native Module通信方法
      */
@@ -241,13 +242,18 @@ abstract class Module {
         callback: AnyCallbackFn? = null,
         syncCall: Boolean = false
     ): ReturnValue {
+        var peekedCallbackRef  = 0
         var callbackRef: CallbackRef? = null
         callback?.also { cb ->
+            peekedCallbackRef = GlobalFunctions.peekNextRef()
             callbackRef = GlobalFunctions.createFunction(pagerId) { res ->
+                pageTrace?.pageEventTrace?.onModuleCallbackStart(moduleName(), methodName, syncCall, peekedCallbackRef)
                 cb(res?.toKotlinObject())
+                pageTrace?.pageEventTrace?.onModuleCallbackEnd(moduleName(), methodName, syncCall, peekedCallbackRef)
                 keepCallbackAlive
             }
         }
+        pageTrace?.pageEventTrace?.onCallModuleStart(moduleName(), methodName, syncCall, peekedCallbackRef)
         val returnValue = BridgeManager.callModuleMethod(
             pagerId,
             moduleName(),
@@ -256,9 +262,9 @@ abstract class Module {
             callbackRef,
             convertSyncCall(syncCall, keepCallbackAlive)
         )
+        pageTrace?.pageEventTrace?.onCallModuleEnd(moduleName(), methodName, syncCall, peekedCallbackRef)
         return ReturnValue(callbackRef, returnValue)
     }
-
 
     fun removeCallback(callbackRef: CallbackRef) {
         GlobalFunctions.destroyGlobalFunction(pagerId, callbackRef)

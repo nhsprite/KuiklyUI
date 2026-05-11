@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,13 +15,14 @@
 
 package com.tencent.kuikly.core.base
 
-import com.tencent.kuikly.core.collection.fastArrayListOf
-import com.tencent.kuikly.core.collection.fastLinkedHashSetOf
+import com.tencent.kuikly.core.collection.fastHashMapOf
+import com.tencent.kuikly.core.collection.fastMutableListOf
+import com.tencent.kuikly.core.collection.fastMutableSetOf
 import com.tencent.kuikly.core.collection.toFastList
 import com.tencent.kuikly.core.manager.PagerManager
 
 class AnimationState {
-    private var nextAnimations: MutableList<Animation> = fastArrayListOf()
+    private var nextAnimations: MutableList<Animation> = fastMutableListOf()
     private var animIndex: Int = 0     // 记录正常动画的index
     private var layoutIndex: Int? = null   // 记录触发layout动画的index
     private var curAnimations: List<Animation> = listOf()
@@ -60,15 +61,14 @@ class AnimationState {
         nextAnimations.clear()
     }
 
-    fun didEndAnmation() {
+    fun didEndAnimation() {
 
     }
 }
 
 class AnimationManager {
-
-    private val animationsHashMap: HashMap<Pair<String, Int>, AnimationState> by lazy(LazyThreadSafetyMode.NONE) { HashMap<Pair<String, Int>, AnimationState>() }
-    private val viewRefToKeys: HashMap<Int, MutableSet<Pair<String, Int>>> by lazy(LazyThreadSafetyMode.NONE) { HashMap<Int, MutableSet<Pair<String, Int>>>() }
+    private val animationsHashMap by lazy(LazyThreadSafetyMode.NONE) { hashMapOf<Pair<String, Int>, AnimationState>() }
+    private val viewRefToKeys by lazy(LazyThreadSafetyMode.NONE) { hashMapOf<Int, MutableSet<Pair<String, Int>>>() }
     private val currentChangingProperty: String?
         get() {
             return PagerManager.getCurrentReactiveObserver().currentChangingPropertyKey
@@ -82,11 +82,11 @@ class AnimationManager {
         val key = genKey(propertyKey, viewRef)
         val animationState = animationsHashMap.getOrPut(key) { AnimationState() }
         viewRefToKeys.getOrPut(viewRef) {
-            fastLinkedHashSetOf()
+            fastMutableSetOf()
         }.add(key)
         animationState.addAnimation(animation, makeDirty)
     }
-    
+
     fun destroy() {
         viewRefToKeys.clear()
         animationsHashMap.clear()
@@ -114,10 +114,10 @@ class AnimationManager {
         }
     }
 
-    fun didEndAnmation(viewRef: Int) {
+    fun didEndAnimation(viewRef: Int) {
         currentChangingProperty?.also { propertyKey ->
             val key = genKey(propertyKey, viewRef)
-            animationsHashMap[key]?.didEndAnmation()
+            animationsHashMap[key]?.didEndAnimation()
         }
     }
 

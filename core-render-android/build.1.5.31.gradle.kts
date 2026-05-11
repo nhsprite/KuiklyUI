@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("maven-publish")
+    signing
 }
 
 group = MavenConfig.GROUP
@@ -31,6 +32,8 @@ afterEvaluate {
                 artifactId = MavenConfig.RENDER_ANDROID_ARTIFACT_ID
                 version = Version.getRenderVersion()
                 from(components["release"])
+                pom.configureMavenCentralMetadata()
+                signPublicationIfKeyPresent(project)
             }
         }
     }
@@ -38,7 +41,7 @@ afterEvaluate {
 
 android {
     compileSdk = 34
-
+    namespace = "com.tencent.kuikly.core.render.android"
     defaultConfig {
         minSdk = 21
         targetSdk = 30
@@ -60,15 +63,14 @@ android {
     }
     kotlinOptions {
         jvmTarget = "1.8"
+        moduleName = "${project.group}.${project.name}"
     }
 }
 
 dependencies {
-    api(Dependencies.tdfCommon)
     compileOnly("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.31")
-    compileOnly("androidx.recyclerview:recyclerview:1.2.1")
+    implementation("androidx.recyclerview:recyclerview:1.2.1")
     compileOnly(project(":core"))
-    compileOnly("androidx.core:core-ktx:1.7.0")
-    compileOnly("androidx.appcompat:appcompat:1.4.2")
-    compileOnly("androidx.dynamicanimation:dynamicanimation:1.0.0")
+    implementation("androidx.appcompat:appcompat:1.4.2")
+    implementation("androidx.dynamicanimation:dynamicanimation:1.0.0")
 }

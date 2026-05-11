@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,6 +14,9 @@
  */
 
 import org.gradle.api.Project
+import org.gradle.api.publish.maven.MavenPom
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.plugins.signing.SigningExtension
 import java.io.File
 import java.io.FileInputStream
 import java.util.Properties
@@ -46,10 +49,6 @@ object Dependencies {
         "androidx.core:core-ktx:1.7.0"
     }
 
-    val tdfCommon by lazy {
-        "com.tencent.tdf:tdf-common:1.0.1"
-    }
-
     val kspSymbolProcessingGradlePlugin by lazy {
         "com.google.devtools.ksp:symbol-processing-gradle-plugin:${Version.getKSPVersion()}"
     }
@@ -63,6 +62,10 @@ object BuildPlugin {
     val android by lazy {
         "com.android.tools.build:gradle:${Version.getAGPVersion()}"
     }
+
+    val kuikly by lazy {
+        "com.tencent.kuikly-open:core-gradle-plugin:2.14.1-2.0.21"
+    }
 }
 
 object Publishing {
@@ -71,14 +74,19 @@ object Publishing {
 
 object Output {
     const val name = "nativevue2"
+    const val KEY_PACK_LOCAL_JS_BUNDLE = "packLocalJsBundle"
     const val KEY_PACK_LOCAL_AAR_BUNDLE = "packLocalAarBundle"
 }
 
 object MavenConfig {
     const val GROUP = "com.tencent.kuikly-open"
-    const val REPO_URL = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
-    const val SNAPSHOT_REPO_URL = ""
+    const val GROUP_WEB = "com.tencent.kuikly-open.core-render-web"
+    const val REPO_URL = ""
+    const val SNAPSHOT_REPO_URL = "https://central.sonatype.com/repository/maven-snapshots/"
     const val RENDER_ANDROID_ARTIFACT_ID = "core-render-android"
+    const val RENDER_WEB_BASE_ARTIFACT_ID = "core-render-web-base"
+    const val RENDER_WEB_H5_ARTIFACT_ID = "core-render-web-h5"
+    const val RENDER_WEB_MINI_APP_ARTIFACT_ID = "core-render-web-miniapp"
 
     private const val KEY_USER_NAME = "username"
     private const val KEY_USER_PASSWORD = "password"
@@ -135,15 +143,17 @@ object Version {
     const val MATERIAL_VERSION = "1.4.0"
     const val SNAPSHOT_SUFFIX = "-SNAPSHOT"
 
-    const val DEFAULT_KUIKLY_VERSION = "1.1.0-beta5"
-    private const val DEFAULT_KOTLIN_VERSION = "1.7.20"
-    private const val DEFAULT_AGP_VERSION = "7.1.3"
+    private const val DEFAULT_KUIKLY_VERSION = "2.0.0"
+    private const val DEFAULT_KOTLIN_VERSION = "2.1.21"
+    private const val DEFAULT_AGP_VERSION = "7.4.2"
 
     private const val KEY_KUIKLY_VERSION = "KUIKLY_VERSION"
     private const val KEY_KOTLIN_VERSION = "KUIKLY_KOTLIN_VERSION"
     private const val KEY_AGP_VERSION = "KUIKLY_AGP_VERSION"
     private const val KEY_CI_BUILD_NUM = "KUIKLY_CI_BUILD_NUM"
     private const val KEY_RENDER_SUFFIX = "KUIKLY_RENDER_SUFFIX"
+    private const val OHOS_KOTLIN_SUFFIX = "KBA-010"
+    private const val KUIKLY_OHOS_KOTLIN_SUFFIX = "ohos"
 
     /**
      * 获取 Kuikly 版本号
@@ -207,6 +217,9 @@ object Version {
             coreVersion = StringBuilder(kuiklyVersion).insert(
                 kuiklyVersion.indexOf(SNAPSHOT_SUFFIX), "-${getKotlinVersion()}").toString()
         }
+        if (coreVersion.contains(OHOS_KOTLIN_SUFFIX)) {
+            coreVersion = coreVersion.replace(OHOS_KOTLIN_SUFFIX, KUIKLY_OHOS_KOTLIN_SUFFIX)
+        }
         return coreVersion
     }
 
@@ -230,8 +243,50 @@ object Version {
             "1.8.21" -> "1.8.21-1.0.11"
             "1.9.22" -> "1.9.22-1.0.16"
             "2.0.21" -> "2.0.21-1.0.27"
-            else -> "${getKotlinVersion()}-1.0.7" // 默认版本
+            "2.0.21-KBA-004" -> "2.0.21-1.0.27"
+            "2.0.21-KBA-010" -> "2.0.21-1.0.27"
+            "2.1.21" -> "2.1.21-2.0.1"
+            else -> "${getKotlinVersion()}-2.0.1" // 默认版本
         }
     }
 
+}
+
+fun MavenPom.configureMavenCentralMetadata() {
+    name.set("KuiklyUI")
+    description.set("`Kuikly` is a comprehensive cross-platform solution for UI and logic based on Kotlin multi-platform. It was launched by Tencent's company-level Oteam in the front-end field. It aims to provide a `high-performance, full-platform development framework with unified codebase, ultimate ease of use, and dynamic flexibility`")
+    url.set("https://github.com/Tencent-TDS/KuiklyUI")
+
+    licenses {
+        license {
+            name.set("KuiklyUI")
+            url.set("https://github.com/Tencent-TDS/KuiklyUI/blob/main/LICENSE")
+        }
+    }
+
+    developers {
+        developer {
+            id.set("tds-Kuikly")
+            name.set("tds-Kuikly Team")
+        }
+    }
+    scm {
+        url.set("https://github.com/Tencent-TDS/KuiklyUI")
+    }
+}
+
+fun MavenPublication.signPublicationIfKeyPresent(project: Project) {
+    val keyId = getSensitiveProperty(project, "signing.keyId")
+    val secretKey = getSensitiveProperty(project, "signing.secretKey")
+    val password = getSensitiveProperty(project, "signing.password")
+    if (!secretKey.isNullOrBlank()) {
+        project.extensions.configure<SigningExtension>("signing") {
+            useInMemoryPgpKeys(keyId, secretKey, password)
+            sign(this@signPublicationIfKeyPresent)
+        }
+    }
+}
+
+fun getSensitiveProperty(project: Project, name: String): String? {
+    return project.findProperty(name) as? String ?: System.getenv(name)
 }

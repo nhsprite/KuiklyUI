@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,7 +22,7 @@ import android.graphics.Rect
 import android.view.View
 import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.ktx.setCommonProp
-import com.tencent.kuikly.core.render.android.css.ktx.viewDecorator
+import com.tencent.kuikly.core.render.android.css.ktx.obtainViewDecorator
 
 /**
  * Frame动画转换器，evaluate方法接收start和end值，并配合[android.animation.RectEvaluator]来进行Frame动画转换
@@ -50,7 +50,7 @@ internal class BackgroundColorTypeEvaluator(private val targetView: View) : Type
 
     override fun evaluate(fraction: Float, startValue: Int?, endValue: Int?): Int {
         val newColor = argbEvaluator.evaluate(fraction, startValue, endValue) as Int
-        targetView.viewDecorator?.backgroundColor = newColor
+        targetView.obtainViewDecorator().backgroundColor = newColor
         return newColor
     }
 
@@ -69,6 +69,8 @@ internal class TransformTypeEvaluator(private val targetView: View) : TypeEvalua
         endValue: KRCSSTransform
     ): KRCSSTransform {
         reuseTransform.rotate = startValue.rotate + (endValue.rotate - startValue.rotate) * fraction
+        reuseTransform.rotateX = startValue.rotateX + (endValue.rotateX - startValue.rotateX) * fraction
+        reuseTransform.rotateY = startValue.rotateY + (endValue.rotateY - startValue.rotateY) * fraction
         reuseTransform.scaleX = startValue.scaleX + (endValue.scaleX - startValue.scaleX) * fraction
         reuseTransform.scaleY = startValue.scaleY + (endValue.scaleY - startValue.scaleY) * fraction
         reuseTransform.translateX = startValue.translateX + (endValue.translateX - startValue.translateX) * fraction

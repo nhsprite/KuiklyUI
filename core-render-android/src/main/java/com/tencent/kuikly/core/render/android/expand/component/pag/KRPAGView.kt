@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,17 +16,17 @@
 package com.tencent.kuikly.core.render.android.expand.component.pag
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
-import android.util.ArrayMap
 import android.view.View
-import android.view.ViewGroup
+import android.widget.ImageView
+import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
+import com.tencent.kuikly.core.render.android.adapter.HRImageLoadOption
 import com.tencent.kuikly.core.render.android.adapter.IPAGViewListener
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
+import com.tencent.kuikly.core.render.android.css.ktx.frameHeight
+import com.tencent.kuikly.core.render.android.css.ktx.frameWidth
 import com.tencent.kuikly.core.render.android.expand.component.KRAPNGView
 import com.tencent.kuikly.core.render.android.expand.component.KRView
 import com.tencent.kuikly.core.render.android.expand.module.KRCodecModule
-import com.tencent.kuikly.core.render.android.expand.module.KRNetworkModule
 import com.tencent.kuikly.core.render.android.expand.vendor.KRFileManager
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import java.io.File
@@ -63,6 +63,7 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
             SRC -> setSrc(propValue)
             REPEAT_COUNT -> repeatCount(propValue)
             AUTO_PLAY -> autoPlay(propValue)
+            SCALE_MODE -> setScaleMode(propValue)
             REPLACE_TEXT_LAYER_CONTENT -> setReplaceTextLayerContent(propValue)
             REPLACE_IMAGE_LAYER_CONTENT -> setReplaceImageLayerContent(propValue)
             LOAD_FAIL -> {
@@ -93,11 +94,24 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
         return result
     }
 
+    private fun setScaleMode(propValue: Any): Boolean {
+        pagView?.setPAGViewScaleMode(propValue as Int)
+        return true
+    }
+
     override fun call(method: String, params: String?, callback: KuiklyRenderCallback?): Any? {
         return when (method) {
             METHOD_PLAY -> play(params)
             METHOD_STOP -> stop(params)
-            else -> super.call(method, params, callback)
+            METHOD_SET_PROGRESS -> setProgress(params)
+            else -> {
+                val result = pagView?.call(method, params, callback)
+                if (result == true) {
+                    null
+                } else {
+                    super.call(method, params, callback)
+                }
+            }
         }
     }
 
@@ -179,6 +193,14 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
         }
     }
 
+    private fun setProgress(params: String?) {
+        if (params != null) {
+            val jsonObject = JSONObject(params)
+            val value = jsonObject.optDouble("value")
+            pagView?.setProgressPAGView(value)
+        }
+    }
+
     private fun setSrc(params: Any): Boolean {
         val newSrc = params as String
         if (src == newSrc) {
@@ -200,7 +222,9 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
     }
 
     private fun setFilePath(filePath: String) {
-        pagView?.setFilePath(filePath)
+        val pagImageLoadOption = HRImageLoadOption(filePath, frameWidth, frameHeight, false, ImageView.ScaleType.FIT_CENTER)
+        kuiklyRenderContext?.getImageLoader()?.convertAssetsPathIfNeed(pagImageLoadOption)
+        pagView?.setFilePath(pagImageLoadOption.src)
         hadFilePath = true
     }
 
@@ -241,6 +265,7 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
         private const val SRC = "src"
         private const val REPEAT_COUNT = "repeatCount"
         private const val AUTO_PLAY = "autoPlay"
+        private const val SCALE_MODE = "scaleMode"
         private const val REPLACE_TEXT_LAYER_CONTENT = "replaceTextLayerContent"
         private const val REPLACE_IMAGE_LAYER_CONTENT = "replaceImageLayerContent"
         private const val LOAD_FAIL = "loadFailure"
@@ -251,6 +276,7 @@ class KRPAGView(context: Context) : KRView(context), IPAGViewListener {
 
         private const val METHOD_PLAY = "play"
         private const val METHOD_STOP = "stop"
+        private const val METHOD_SET_PROGRESS = "setProgress"
 
         const val VIEW_NAME = "KRPAGView"
     }

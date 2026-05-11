@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,8 +17,10 @@
 #import <CommonCrypto/CommonDigest.h>
 #import "KRConvertUtil.h"
 #import "KRLogModule.h"
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
+#import <objc/runtime.h>
 #import <Accelerate/Accelerate.h>
+#import <CoreImage/CoreImage.h>
 
 @implementation NSObject (KR)
 
@@ -74,8 +76,9 @@
         string =  [((NSNumber *)self) stringValue];
     }
     if (string) {
-        return (NSString*)CFBridgingRelease(CFURLCreateStringByAddingPercentEscapes(nil,(CFStringRef)string,
-                                                                                    nil,(CFStringRef)@"!*'();:@&=+$,/?%#[]", kCFStringEncodingUTF8));
+        NSMutableCharacterSet *allowedCharacterSet = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+        [allowedCharacterSet removeCharactersInString:@"!*'();:@&=+$,/?%#[]"];
+        return [string stringByAddingPercentEncodingWithAllowedCharacters:allowedCharacterSet] ?: @"";
     }
     return @"";
 }
@@ -88,12 +91,15 @@
     }
     [invocation setSelector:selector];
     [invocation invokeWithTarget:self];
-    if (strcmp(methodSignature.methodReturnType, @encode(void)) != 0) {
-        void *returnValue;
-        [invocation getReturnValue:&returnValue];
-        return (__bridge  id)returnValue;
+    // 增加值类型返回的支持：仅返回对象类型 -> 返回对象类型 + 包装对象的指针（kr_objectWithBuffer对值类型装箱）
+    if (!methodSignature.methodReturnLength) {
+        return nil;
+    } else {
+        void *valueLoc = alloca(methodSignature.methodReturnLength);
+        [invocation getReturnValue:valueLoc];
+        return [NSObject kr_objectWithBuffer:valueLoc type:methodSignature.methodReturnType];
     }
-    return nil;
+    
 }
 
 + (id)kr_performWithTarget:(id)target selector:(SEL)aSelector  withObjects:(NSArray *)objects {
@@ -172,6 +178,21 @@
   }
 }
 
++ (BOOL)kr_swizzleInstanceMethod:(SEL)origSel withMethod:(SEL)altSel {
+    Method originMethod = class_getInstanceMethod(self, origSel);
+    Method newMethod = class_getInstanceMethod(self, altSel);
+
+    if (originMethod && newMethod) {
+        if (class_addMethod(self, origSel, method_getImplementation(newMethod), method_getTypeEncoding(newMethod))) {
+            class_replaceMethod(self, altSel, method_getImplementation(originMethod), method_getTypeEncoding(originMethod));
+        } else {
+            method_exchangeImplementations(originMethod, newMethod);
+        }
+        return YES;
+    }
+    return NO;
+}
+
 
 
 @end
@@ -237,6 +258,19 @@
             ];
 }
 
+- (NSString *)kr_md5String32 {
+    const char *cstr = [self UTF8String];
+    unsigned char result[16];
+    CC_MD5(cstr, (CC_LONG)strlen(cstr), result);
+    
+    return [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            result[0], result[1], result[2], result[3],
+            result[4], result[5], result[6], result[7],
+            result[8], result[9], result[10], result[11],
+            result[12], result[13], result[14], result[15]
+            ];
+}
+
 
 - (NSString *)kr_base64Encode {
     NSData *data = [self dataUsingEncoding: NSUTF8StringEncoding];
@@ -259,7 +293,56 @@
     return hashString;
 }
 
+- (NSString *)kr_subStringWithIndex:(NSUInteger)index {
+    NSString *result = self;
+    if (result.length > index) {
+        NSRange range = [result rangeOfComposedCharacterSequenceAtIndex:index];
+        if (range.location>= 0) {
+            result = [result substringToIndex:range.location];
+        }
+    }
+    return result;
+}
 
+- (NSUInteger )kr_length {
+    NSUInteger count = 0;
+    NSUInteger length = self.length;
+    for (NSUInteger i = 0; i < length; ) {
+        NSRange range = [self rangeOfComposedCharacterSequenceAtIndex:i];
+        count++;
+        i += range.length;
+    }
+    return count;
+}
+
+- (NSUInteger)kr_byteLength {
+    return [self lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+}
+
+- (NSUInteger)kr_visualWidth {
+    NSUInteger visualWidth = 0;
+    NSUInteger length = self.length;
+    for (NSUInteger i = 0; i < length; ) {
+        NSRange range = [self rangeOfComposedCharacterSequenceAtIndex:i];
+        unichar firstChar = [self characterAtIndex:i];
+        
+        // 检查是否是ASCII字符（0-127）
+        if (range.length == 1 && firstChar < 128) {
+            visualWidth += 1;
+        } else if (range.length == 1 && firstChar >= 0x200B && firstChar <= 0x200D) {
+            // 零宽字符
+            visualWidth += 1;
+        } else if (range.length == 1 && firstChar == 0xFEFF) {
+            // 零宽不换行空格
+            visualWidth += 1;
+        } else {
+            // 其他字符（中文、emoji等）占2个视觉宽度
+            visualWidth += 2;
+        }
+        i += range.length;
+    }
+    return visualWidth;
+}
 
 @end
 
@@ -269,20 +352,25 @@
 
 + (UIImage *)kr_safeAsImageWithLayer:(CALayer *)layer bounds:(CGRect)bounds {
     @autoreleasepool {
-        if (@available(iOS 10.0, *)) {
-            UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:bounds];
-            return [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
-                          [layer renderInContext:rendererContext.CGContext];
-                    }];
-        } else {
-            UIGraphicsBeginImageContext(bounds.size);
-            [layer renderInContext:UIGraphicsGetCurrentContext()];
-            UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-            return image;
-        }
+#if TARGET_OS_OSX // [macOS]
+        KRUIGraphicsImageRendererFormat *format = [KRUIGraphicsImageRendererFormat defaultFormat];
+        format.scale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+        format.opaque = layer.isOpaque;
+        KRUIGraphicsImageRenderer *renderer = [[KRUIGraphicsImageRenderer alloc] initWithSize:bounds.size format:format];
+        return [renderer imageWithActions:^(KRUIGraphicsImageRendererContext *rendererContext) {
+            CGContextRef ctx = [rendererContext CGContext];
+            [layer renderInContext:ctx];
+        }];
+#else // [macOS]
+        UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+        format.scale = [UIScreen mainScreen].scale;
+        format.opaque = layer.isOpaque;
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:bounds.size format:format];
+        return [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
+            [layer renderInContext:rendererContext.CGContext];
+        }];
+#endif // [macOS]
     }
-    
 }
 
 - (UIViewController *)kr_viewController {
@@ -436,22 +524,120 @@
     
     CGSize newSize = CGSizeMake(image.size.width * ratio, image.size.height * ratio);
     
+#if TARGET_OS_OSX // [macOS]
+    KRUIGraphicsImageRendererFormat *format = [KRUIGraphicsImageRendererFormat defaultFormat];
+    format.scale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+    format.opaque = YES;
+    KRUIGraphicsImageRenderer *renderer = [[KRUIGraphicsImageRenderer alloc] initWithSize:newSize format:format];
+    UIImage *resizedImage = [renderer imageWithActions:^(KRUIGraphicsImageRendererContext *rendererContext) {
+        [image drawInRect:CGRectMake(0, 0, newSize.width, newSize.height)];
+    }];
+    return resizedImage;
+#else // [macOS]
     UIGraphicsBeginImageContextWithOptions(newSize, YES, 0.0);
     [image drawInRect:CGRectMake(0, 0, newSize.width, newSize.height)];
     UIImage *resizedImage = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return resizedImage;
+#endif // [macOS]
 }
 
 
 - (UIImage *)kr_tintedImageWithColor:(UIColor *)color {
+#if TARGET_OS_OSX // [macOS]
+    if (!color) { return self; }
+    CGSize size = self.size;
+    KRUIGraphicsImageRendererFormat *format = [KRUIGraphicsImageRendererFormat defaultFormat];
+    format.scale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+    format.opaque = NO;
+    KRUIGraphicsImageRenderer *renderer = [[KRUIGraphicsImageRenderer alloc] initWithSize:size format:format];
+    UIImage *tintedImage = [renderer imageWithActions:^(KRUIGraphicsImageRendererContext *rendererContext) {
+        CGContextRef ctx = [rendererContext CGContext];
+        CGRect rect = CGRectMake(0, 0, size.width, size.height);
+        CGImageRef cgImage = self.CGImage;
+        CGContextSetFillColorWithColor(ctx, [color CGColor]);
+        CGContextFillRect(ctx, rect);
+        CGContextSetBlendMode(ctx, kCGBlendModeDestinationIn);
+        CGContextDrawImage(ctx, rect, cgImage);
+    }];
+    return tintedImage;
+#else // [iOS]
     if (@available(iOS 13.0, *)) {
         return [self imageWithTintColor:color];
     }
-   
     return [self imageWithRenderingMode:(UIImageRenderingModeAlwaysTemplate)];
+#endif // [macOS]
 }
 
+- (UIImage *)kr_applyColorFilterWithColorMatrix:(NSString *)colorFilterMatrix {
+    NSArray<NSString *> *colorMatrix = [colorFilterMatrix componentsSeparatedByString:@"|"];
+    if ([colorMatrix count] < 20) {
+        return self;
+    }
+    UIImage *image = self;
+#if TARGET_OS_OSX // [macOS]
+    CGImageRef cgImage = image.CGImage;
+    if (!cgImage) { return self; }
+    CIImage *ciImage = [[CIImage alloc] initWithCGImage:cgImage];
+#else // [iOS]
+    CIImage *ciImage = [[CIImage alloc] initWithImage:image];
+#endif // [macOS]
+    CIFilter *filter = [CIFilter filterWithName:@"CIColorMatrix"];
+    
+    CIVector *vectorR = [CIVector vectorWithX:[colorMatrix[0] floatValue]
+                                            Y:[colorMatrix[1] floatValue]
+                                            Z:[colorMatrix[2] floatValue]
+                                            W:[colorMatrix[3] floatValue]];
+    CIVector *vectorG = [CIVector vectorWithX:[colorMatrix[5] floatValue]
+                                            Y:[colorMatrix[6] floatValue]
+                                            Z:[colorMatrix[7] floatValue]
+                                            W:[colorMatrix[8] floatValue]];
+    CIVector *vectorB = [CIVector vectorWithX:[colorMatrix[10] floatValue]
+                                            Y:[colorMatrix[11] floatValue]
+                                            Z:[colorMatrix[12] floatValue]
+                                            W:[colorMatrix[13] floatValue]];
+    CIVector *vectorA = [CIVector vectorWithX:[colorMatrix[15] floatValue]
+                                            Y:[colorMatrix[16] floatValue]
+                                            Z:[colorMatrix[17] floatValue]
+                                            W:[colorMatrix[18] floatValue]];
+    CIVector *vectorBias = [CIVector vectorWithX:[colorMatrix[4] floatValue]
+                                               Y:[colorMatrix[9] floatValue]
+                                               Z:[colorMatrix[14] floatValue]
+                                               W:[colorMatrix[19] floatValue]];
+    
+    [filter setValue:ciImage forKey:kCIInputImageKey];
+    [filter setValue:vectorR forKey:@"inputRVector"];
+    [filter setValue:vectorG forKey:@"inputGVector"];
+    [filter setValue:vectorB forKey:@"inputBVector"];
+    [filter setValue:vectorA forKey:@"inputAVector"];
+    [filter setValue:vectorBias forKey:@"inputBiasVector"];
+    
+    CIContext *context = [CIContext contextWithOptions:nil];
+    CIImage *outputCIImage = filter.outputImage;
+    CGImageRef filteredImageRef = [context createCGImage:outputCIImage fromRect:outputCIImage.extent];
+#if TARGET_OS_OSX // [macOS]
+    UIImage *filteredImage = [UIImage imageWithCGImage:filteredImageRef];
+#else // [iOS]
+    UIImage *filteredImage = [UIImage imageWithCGImage:filteredImageRef scale:image.scale orientation:image.imageOrientation];
+#endif // [macOS]
+    CGImageRelease(filteredImageRef);
+    
+    return filteredImage;
+}
+
+
+@end
+
+
+
+@implementation NSMutableAttributedString (KR)
+
+- (void)kr_addAttribute:(NSAttributedStringKey)name value:(id)value range:(NSRange)range {
+    if (!value || [value isKindOfClass:[NSNull class]]) {
+        return ;
+    }
+    [self addAttribute:name value:value range:range];
+}
 
 @end
 

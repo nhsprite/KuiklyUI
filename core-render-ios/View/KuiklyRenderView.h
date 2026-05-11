@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,11 +13,12 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
-#import <TDFCommon/TDFModuleProtocol.h>
+#import "KRUIKit.h" // [macOS]
+#import "TDFModuleProtocol.h"
 #import "KuiklyRenderViewExportProtocol.h"
 #import "KuiklyContextParam.h"
 #import "KuiklyRenderContextProtocol.h"
+#import "KRTurboDisplayConfig.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -25,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol KuiklyRenderViewDelegate;
 @protocol KuiklyRenderLayerProtocol;
 /** RootView尺寸变化事件名. */
-UIKIT_EXTERN NSString *const KRRootViewSizeDidChangedEventKey;
+FOUNDATION_EXTERN NSString *const KRRootViewSizeDidChangedEventKey;
 /**
  * Kuikly by kotlin 渲染视图类，业务用该类作为对KuiklyRender的使用.
  * 注：业务接入层建议对接KuiklyRenderViewControllerDelegator类，因其对KuiklyRenderView进行了封装，所以不建议直接使用KuiklyRenderView类
@@ -141,6 +142,16 @@ UIKIT_EXTERN NSString *const KRRootViewSizeDidChangedEventKey;
  * @return 返回该页面的TurboDisplayKey（一般可为PageName，若为nil，则为关闭TurboDisplay渲染模式）
  */
 - (NSString * _Nullable)turboDisplayKey;
+
+/*
+ * @brief 设置 当前页面获取信息来源的window 为 业务在 vc 中指定window
+ */
+- (UIWindow * _Nullable)viewControllerHostWindow;
+
+/*
+ * @brief 返回 TurboDisplay 页面级配置（新增）
+ */
+- (KRTurboDisplayConfig * _Nullable)turboDisplayConfig;
 
 @end
 

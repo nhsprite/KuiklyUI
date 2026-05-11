@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,14 +21,14 @@ import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.reactive.ReactiveObserver
 import com.tencent.kuikly.core.utils.ConvertUtil
 
-enum class ConditionType {
-    VIF, VELSEIF, VELSE
+internal enum class ConditionType {
+    V_IF, V_ELSE_IF, V_ELSE
 }
 
 /**
  * 条件指令标签节点, 作为模板条件指令，如vif, velseif, velse等模板指令
  */
-class ConditionView(
+class ConditionView internal constructor(
     private val conditionType: ConditionType,
     private val condition: () -> Any?,
     private val creator: ConditionView.() -> Unit
@@ -48,7 +48,6 @@ class ConditionView(
         return "ConditionView"
     }
 
-
     override fun didMoveToParentView() {
         super.didMoveToParentView()
         setupRootConditionViewRef()
@@ -67,7 +66,7 @@ class ConditionView(
     }
 
     private fun setupRootConditionViewRef() {
-        if (conditionType == ConditionType.VIF) {
+        if (conditionType == ConditionType.V_IF) {
             rootConditionViewRef = nativeRef
         } else {
             val prevView = this.prevDirectivesView
@@ -150,7 +149,7 @@ class ConditionView(
     private fun isIfConditionView(view: DeclarativeBaseView<*, *>?): Boolean {
         if (view != null
             && view is ConditionView
-            && view.conditionType == ConditionType.VIF
+            && view.conditionType == ConditionType.V_IF
         ) {
             return true
         }
@@ -160,7 +159,7 @@ class ConditionView(
     private fun isElseIfConditionView(view: DeclarativeBaseView<*, *>?): Boolean {
         if (view != null
             && view is ConditionView
-            && view.conditionType == ConditionType.VELSEIF
+            && view.conditionType == ConditionType.V_ELSE_IF
         ) {
             return true
         }
@@ -214,7 +213,7 @@ fun ViewContainer<*, *>.vif(
     condition: () -> Any?,
     creator: ConditionView.() -> Unit
 ) {
-    val view = ConditionView(ConditionType.VIF, condition, creator)
+    val view = ConditionView(ConditionType.V_IF, condition, creator)
     addChild(view) { }
 }
 
@@ -222,15 +221,11 @@ fun ViewContainer<*, *>.velseif(
     condition: () -> Any?,
     creator: ConditionView.() -> Unit
 ) {
-    val view = ConditionView(ConditionType.VELSEIF, condition, creator)
+    val view = ConditionView(ConditionType.V_ELSE_IF, condition, creator)
     addChild(view) { }
 }
 
 fun ViewContainer<*, *>.velse(creator: ConditionView.() -> Unit) {
-    val view = ConditionView(ConditionType.VELSE, { true }, creator)
+    val view = ConditionView(ConditionType.V_ELSE, { true }, creator)
     addChild(view) { }
 }
-
-
-
-

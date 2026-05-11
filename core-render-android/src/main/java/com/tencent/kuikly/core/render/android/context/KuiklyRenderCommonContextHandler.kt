@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,19 +15,18 @@
 
 package com.tencent.kuikly.core.render.android.context
 
-import com.tencent.kuikly.core.render.android.css.ktx.isMainThread
-import com.tencent.kuikly.core.render.android.css.ktx.firstArg
-import com.tencent.kuikly.core.render.android.css.ktx.secondArg
-import com.tencent.kuikly.core.render.android.css.ktx.thirdArg
-import com.tencent.kuikly.core.render.android.css.ktx.fourthArg
 import com.tencent.kuikly.core.render.android.css.ktx.fifthArg
+import com.tencent.kuikly.core.render.android.css.ktx.firstArg
+import com.tencent.kuikly.core.render.android.css.ktx.fourthArg
+import com.tencent.kuikly.core.render.android.css.ktx.isMainThread
+import com.tencent.kuikly.core.render.android.css.ktx.secondArg
 import com.tencent.kuikly.core.render.android.css.ktx.sixthArg
+import com.tencent.kuikly.core.render.android.css.ktx.thirdArg
 import com.tencent.kuikly.core.render.android.css.ktx.toJSONArray
 import com.tencent.kuikly.core.render.android.css.ktx.toJSONObject
-import com.tencent.kuikly.core.render.android.exception.IKuiklyRenderExceptionListener
 import com.tencent.kuikly.core.render.android.exception.ErrorReason
+import com.tencent.kuikly.core.render.android.exception.IKuiklyRenderExceptionListener
 import org.json.JSONObject
-import java.lang.ref.WeakReference
 
 /**
  * KuiklyRender执行模式基类

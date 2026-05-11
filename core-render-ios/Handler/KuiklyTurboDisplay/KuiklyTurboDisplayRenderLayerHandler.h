@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 
 #import <Foundation/Foundation.h>
 #import "KuiklyRenderLayerProtocol.h"
+#import "KRTurboDisplayConfig.h"
 NS_ASSUME_NONNULL_BEGIN
 @class KuiklyRenderUIScheduler;
 @class KuiklyRenderCore;
@@ -25,8 +26,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KuiklyTurboDisplayRenderLayerHandler : NSObject<KuiklyRenderLayerProtocol>
 /** ui调度器 */
 @property (nonatomic, weak) KuiklyRenderUIScheduler *uiScheduler;
+/** 额外缓存内容（JSON字符串），在init时从缓存读取，用于传递给Kotlin侧pageData */
+@property (nonatomic, copy, readonly, nullable) NSString *extraCacheContent;
 
-- (instancetype)initWithRootView:(UIView *)rootView contextParam:(KuiklyContextParam *)contextParam turboDisplayKey:(NSString *)turboDisplayKey;
+- (instancetype)initWithRootView:(UIView *)rootView contextParam:(KuiklyContextParam *)contextParam turboDisplayKey:(NSString *)turboDisplayKey turboDisplayConfig:( KRTurboDisplayConfig* _Nullable )turboDisplayConfig;
 
 
 @end

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,8 @@
 package com.tencent.kuikly.core.base.attr
 
 import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
+
 /**
  * Image 相关接口
  */
@@ -29,6 +31,10 @@ interface IImageAttr {
     fun src(src: String, isDotNineImage: Boolean = false): IImageAttr
 
     fun src(uri: ImageUri, isDotNineImage: Boolean = false): IImageAttr
+
+    fun src(src: String, imageParams: JSONObject?, isDotNineImage: Boolean = false): IImageAttr
+
+    fun src(uri: ImageUri, imageParams: JSONObject?, isDotNineImage: Boolean = false): IImageAttr
 
     /**
      * 设置图片占位图。
@@ -59,7 +65,6 @@ interface IImageAttr {
     fun resizeContain(): IImageAttr
 
     fun resizeStretch(): IImageAttr
-
 
     /**
      * 设置拉伸区域

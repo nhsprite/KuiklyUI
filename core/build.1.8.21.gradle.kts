@@ -6,6 +6,7 @@ plugins {
     kotlin("native.cocoapods")
     id("com.android.library")
     id("maven-publish")
+    signing
 }
 
 group = MavenConfig.GROUP
@@ -26,14 +27,22 @@ publishing {
         } else {
             mavenLocal()
         }
+
+        publications.withType<MavenPublication>().configureEach {
+            pom.configureMavenCentralMetadata()
+            signPublicationIfKeyPresent(project)
+        }
     }
 }
 
 kotlin {
-    // targetes
-    jvm()
 
     android {
+        compilations.all {
+            kotlinOptions {
+                moduleName = "${project.group}.${project.name}"
+            }
+        }
         publishLibraryVariantsGroupedByFlavor = true
         publishLibraryVariants("release")
     }
@@ -43,17 +52,22 @@ kotlin {
     iosX64()
 
     // sourceSets
-    val commonMain by sourceSets.getting
-
-    val iosMain by sourceSets.getting {
-        dependsOn(commonMain)
+    sourceSets {
+        val commonMain by getting
+        val appleMain by sourceSets.creating {
+            dependsOn(commonMain)
+        }
     }
 
     targets.withType<KotlinNativeTarget> {
-        val mainSourceSets = this.compilations.getByName("main").defaultSourceSet
+        val appleMain by sourceSets.getting
         when {
             konanTarget.family.isAppleFamily -> {
-                mainSourceSets.dependsOn(iosMain)
+                val main by compilations.getting
+                main.defaultSourceSet.dependsOn(appleMain)
+                val kuikly by main.cinterops.creating {
+                    defFile(project.file("src/appleMain/iosInterop/cinterop/ios.def"))
+                }
             }
         }
     }
@@ -73,6 +87,7 @@ kotlin {
 
 android {
     compileSdk = 30
+    namespace = "com.tencent.kuikly.core"
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     defaultConfig {
         minSdk = 21

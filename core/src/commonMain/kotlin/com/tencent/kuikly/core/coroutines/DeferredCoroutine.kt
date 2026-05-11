@@ -1,44 +1,67 @@
 package com.tencent.kuikly.core.coroutines
 
 import com.tencent.kuikly.core.collection.fastArrayListOf
-import kotlin.coroutines.*
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.suspendCoroutine
 
-open class DeferredCoroutine<T>(
-    parentContext: CoroutineContext,
-    active: Boolean
-) : AbstractCoroutine<T>(parentContext, true, active = active), Deferred<T> {
-    private var suspendCoroutineResumeTasks = fastArrayListOf< (T)->Unit >()
+internal class DeferredCoroutine<T>(
+    parentContext: CoroutineContext
+) : AbstractCoroutine<T>(parentContext), Deferred<T> {
+    private var awaiters = fastArrayListOf<Continuation<T>>()
     override suspend fun await(): T = awaitInternal()
     private var didSetResultValue = false
     private var resumeResultValue: T? = null
-         set(value) {
-             field = value
-             didSetResultValue = true
-         }
+        set(value) {
+            field = value
+            didSetResultValue = true
+        }
+    private var resumeResultError: Throwable? = null
+
     override fun resumeWith(result: Result<T>) {
         if (result.isSuccess) {
             resumeResultValue = result.getOrNull()
-            suspendCoroutineResumeTasks.forEach { callback ->
-                callback.invoke(resumeResultValue as T)
+            awaiters.forEach { c ->
+                val j = c.context[Job]
+                (c.context[Job] as? AbstractCoroutine<*>)?.unregisterCancellable(c)
+                if (j == null || j.isActive) {
+                    @Suppress("UNCHECKED_CAST")
+                    c.resumeWith(Result.success(resumeResultValue as T))
+                }
             }
-            suspendCoroutineResumeTasks.clear()
+            awaiters.clear()
+            complete(null)
         } else {
-            throw RuntimeException("result failure:" + result.exceptionOrNull())
+            resumeResultError = result.exceptionOrNull()
+            awaiters.forEach { c ->
+                val j = c.context[Job]
+                (c.context[Job] as? AbstractCoroutine<*>)?.unregisterCancellable(c)
+                if (j == null || j.isActive) {
+                    c.resumeWith(Result.failure(resumeResultError!!))
+                }
+            }
+            awaiters.clear()
+            complete(resumeResultError)
+            throw RuntimeException("result failure:" + resumeResultError)
         }
     }
 
     private suspend fun awaitInternal(): T {
         if (didSetResultValue) {
+            @Suppress("UNCHECKED_CAST")
             return resumeResultValue as T
+        }
+        val e = resumeResultError
+        if (e != null) {
+            throw e
         }
         return awaitSuspend() // slow-path
     }
 
-    private suspend fun awaitSuspend(): T = suspendCoroutine {
-          this.suspendCoroutineResumeTasks.add { value ->
-              it.resume(value)
-          }
+    private suspend fun awaitSuspend(): T = suspendCoroutine { cont ->
+        val aj = cont.context[Job] as? AbstractCoroutine<*>
+        aj?.registerCancellable(cont)
+        awaiters.add(cont)
     }
-
 
 }

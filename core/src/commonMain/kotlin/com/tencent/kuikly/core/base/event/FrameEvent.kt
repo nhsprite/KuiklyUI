@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 package com.tencent.kuikly.core.base.event
 
 import com.tencent.kuikly.core.base.DeclarativeBaseView
+import com.tencent.kuikly.core.base.Size
 import com.tencent.kuikly.core.layout.Frame
 
 /*
@@ -23,6 +24,10 @@ import com.tencent.kuikly.core.layout.Frame
  */
 fun Event.layoutFrameDidChange(handlerFn: (layoutFrame: Frame) -> Unit) {
     getFramePlugin().layoutFrameChangedHandlerFn = handlerFn
+}
+
+fun Event.notifyLayoutFrameDidChange(layoutFrame: Frame) {
+    getFramePlugin().layoutFrameChangedHandlerFn?.invoke(layoutFrame)
 }
 
 fun Event.renderViewDidCreated(handlerFn: EventHandlerFn) {
@@ -83,9 +88,7 @@ internal class FrameEvent : BaseEvent() {
         const val PLUGIN_NAME = "FrameEvent"
     }
 
-
 }
-
 
 //获取所属的事件中心插件，如果不存在需要创建并put进去
 private fun Event.getFramePlugin(): FrameEvent {
@@ -98,4 +101,3 @@ private fun Event.getFramePlugin(): FrameEvent {
     }
     return plugin as FrameEvent
 }
-

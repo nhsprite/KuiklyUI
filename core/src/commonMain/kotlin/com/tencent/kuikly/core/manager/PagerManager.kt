@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,6 +23,7 @@ import com.tencent.kuikly.core.global.GlobalFunctions
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import com.tencent.kuikly.core.pager.IPager
 import com.tencent.kuikly.core.pager.PageCreateTrace
+import com.tencent.kuikly.core.pager.PageEventTrace
 import com.tencent.kuikly.core.reactive.ReactiveObserver
 import com.tencent.kuikly.core.utils.getParamFromUrl
 
@@ -36,8 +37,17 @@ object PagerManager {
         return pagerMap[pagerId] ?: throw PagerNotFoundException("pager not found: $pagerId")
     }
 
+    fun getPagerEventTrace(pagerId: String) : PageEventTrace? {
+        try {
+            return getPager(pagerId).getPageTrace()?.pageEventTrace
+        }catch (e: Throwable){
+            // noop
+        }
+        return null
+    }
+
     fun isPagerCreatorExist(pageName: String): Boolean {
-        return pagerNameMap.containsKey(pageName.toLowerCase())
+        return pagerNameMap.containsKey(pageName.lowercase())
     }
     fun getCurrentPager(): IPager {
         return pagerMap[BridgeManager.currentPageId] ?: throw PagerNotFoundException("pager not found: ${BridgeManager.currentPageId}")
@@ -56,6 +66,8 @@ object PagerManager {
     ) {
         val pageTrace = PageCreateTrace()
         val pagerName = pageNameFromUrl(url)
+        pageTrace.pageName = pagerName
+        pageTrace.pageId = pagerId
         reactiveObserverMap[pagerId] = ReactiveObserver()
 
         pageTrace.onNewPageStart()
@@ -80,7 +92,7 @@ object PagerManager {
     fun destroyPager(pagerId: String) {
         pagerMap[pagerId]?.onDestroyPager()
         pagerMap.remove(pagerId)
-        getCurrentReactiveObserver().destroy()
+        reactiveObserverMap[pagerId]?.destroy()
         reactiveObserverMap.remove(pagerId)
     }
 
@@ -102,12 +114,12 @@ object PagerManager {
 
     fun registerPageRouter(pageName: String, creator: () -> IPager) {
         // need support forward compatible, so use toLowerCase
-        pagerNameMap[pageName.toLowerCase()] = creator
+        pagerNameMap[pageName.lowercase()] = creator
     }
 
     private fun pagerCreator(pageName: String): (() -> IPager)? {
         // need support forward compatible, so use toLowerCase
-        return pagerNameMap[pageName.toLowerCase()]
+        return pagerNameMap[pageName.lowercase()]
     }
 
     private fun pageNameFromUrl(url: String): String {

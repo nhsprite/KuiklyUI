@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,6 +17,7 @@
 #import "KRConvertUtil.h"
 #import "KRRichTextView.h"
 #import "KuiklyRenderBridge.h"
+#import "NSObject+KR.h"
 // 字典key常量
 NSString *const KRVFontSizeKey = @"fontSize";
 NSString *const KRVFontWeightKey = @"fontWeight";
@@ -40,7 +41,9 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 /** attr is placeholderColor */
 @property (nonatomic, strong)  NSString *KUIKLY_PROP(placeholderColor);
 /** attr is maxTextLength */
-@property (nonatomic, strong)  NSString *KUIKLY_PROP(maxTextLength);
+@property (nonatomic, strong)  NSNumber *KUIKLY_PROP(maxTextLength);
+/** attr is lengthLimitType */
+@property (nonatomic, strong)  NSNumber *KUIKLY_PROP(lengthLimitType);
 /** attr is tint color */
 @property (nonatomic, strong, readwrite) NSString *KUIKLY_PROP(tintColor);
 /** attr is color */
@@ -51,6 +54,8 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 @property (nonatomic, strong)  NSString *KUIKLY_PROP(keyboardType);
 /** attr is returnKeyType */
 @property (nonatomic, strong)  NSString *KUIKLY_PROP(returnKeyType);
+/** 是否在点击 IME 动作按钮（如 Send/Go/Search）时自动收起键盘，默认值为 YES，即自动收起，可由业务设置autoHideKeyboardOnImeAction来关闭*/
+@property (nonatomic, strong)  NSNumber *KUIKLY_PROP(autoHideKeyboardOnImeAction);
 /** event is textDidChange 文本变化 */
 @property (nonatomic, strong)  KuiklyRenderCallback KUIKLY_PROP(textDidChange);
 /** event is inputFocus 获焦 触发 */
@@ -63,6 +68,8 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 @property (nonatomic, strong)  KuiklyRenderCallback KUIKLY_PROP(keyboardHeightChange);
 /** event is textLengthBeyondLimit 输入长度超过限制 */
 @property (nonatomic, strong)  KuiklyRenderCallback KUIKLY_PROP(textLengthBeyondLimit);
+/** attr is enablePinyinCallback 是否启用拼音输入回调 */
+@property (nonatomic, strong)  NSNumber *KUIKLY_PROP(enablePinyinCallback);
 
 @end
 
@@ -83,6 +90,7 @@ NSString *const KRVFontWeightKey = @"fontWeight";
     if (self = [super init]) {
         self.delegate = self;
         _props = [NSMutableDictionary new];
+        self.css_autoHideKeyboardOnImeAction = [NSNumber numberWithInt: 1];     // 保持原有能力，默认是关闭关闭软键盘
         [self addTarget:self action:@selector(onTextFeildTextChanged:) forControlEvents:UIControlEventEditingChanged];
     }
     return self;
@@ -114,6 +122,12 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 
 - (void)setCss_text:(NSString *)css_text {
     self.text = css_text;
+    NSString *lastText = self.text ?: @"";
+    NSString *newText = css_text ?: @"";
+    if (![lastText isEqualToString:newText]) {
+        self.text = css_text;
+        [self onTextFeildTextChanged:self];
+    }
 }
 
 - (void)setCss_values:(NSString *)css_values {
@@ -124,6 +138,7 @@ NSString *const KRVFontWeightKey = @"fontWeight";
             for (NSString *key in _props.allKeys) {
                 [textShadow hrv_setPropWithKey:key propValue:_props[key]];
             }
+            [textShadow hrv_setPropWithKey:@"contextParam" propValue:self.hr_rootView.contextParam];
             // 保存原光标位置
             UITextRange *originalSelectedTextRange = self.selectedTextRange;
             // 设置新的 attributedText
@@ -138,7 +153,7 @@ NSString *const KRVFontWeightKey = @"fontWeight";
         } else {
             self.attributedText = nil;
         }
-  
+        [self onTextFeildTextChanged:self];
     }
 }
 
@@ -181,15 +196,29 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 
 - (void)setCss_keyboardType:(NSString *)css_keyboardType {
     self.keyboardType = [KRConvertUtil hr_keyBoardType:css_keyboardType];
+    [self setSecureTextEntry:[css_keyboardType isEqualToString:@"password"]];
 }
 
 - (void)setCss_returnKeyType:(NSString *)css_returnKeyType {
+    _css_returnKeyType = css_returnKeyType;
     self.returnKeyType = [KRConvertUtil hr_toReturnKeyType:css_returnKeyType];
+}
+
+- (void)setCss_autoHideKeyboardOnImeAction:(NSNumber *)css_autoHideKeyboardOnImeAction {
+    _css_autoHideKeyboardOnImeAction = css_autoHideKeyboardOnImeAction;
+}
+
+- (void)setCss_enablesReturnKeyAutomatically:(NSNumber *)flag{
+    self.enablesReturnKeyAutomatically = [flag boolValue];
 }
 
 - (void)setCss_keyboardHeightChange:(KuiklyRenderCallback)css_keyboardHeightChange {
     _css_keyboardHeightChange = css_keyboardHeightChange;
     [self p_addKeyboardNotificationIfNeed];
+}
+
+- (void)setCss_enablePinyinCallback:(NSNumber *)css_enablePinyinCallback {
+    _css_enablePinyinCallback = css_enablePinyinCallback;
 }
 
 #pragma mark - css method
@@ -235,7 +264,7 @@ NSString *const KRVFontWeightKey = @"fontWeight";
     [super layoutSubviews];
     if (_setNeedUpdatePlaceholder) {
         _setNeedUpdatePlaceholder = NO;
-        UIColor *color = [UIView css_color:self.css_placeholderColor];
+        UIColor *color = [UIView css_color:self.css_placeholderColor] ?: [UIColor grayColor];
         UIFont *font = self.font ?: [UIFont systemFontOfSize:16];
         self.attributedPlaceholder = [[NSMutableAttributedString alloc] initWithString:self.placeholder ?: @""
                                                                             attributes:@{NSForegroundColorAttributeName:color?: [UIColor clearColor],
@@ -247,12 +276,21 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 #pragma mark - UITextViewDelegate
 
 - (void)onTextFeildTextChanged:(UITextField *)textField {  // 文本值变化
+    // 如果有拼音输入，根据配置决定是否触发回调
     if (textField.markedTextRange) {
-        return ;
+        BOOL enablePinyinCallback = [self.css_enablePinyinCallback boolValue];
+        if (enablePinyinCallback) {
+            if (self.css_textDidChange) {
+                NSString *text = textField.text.copy ?: @"";
+                self.css_textDidChange(@{@"text": text, @"length": @([self p_calculateLengthForText:text])});
+            }
+        }
+        return;
     }
     [self p_limitTextInput];
     if (self.css_textDidChange) {
-        self.css_textDidChange(@{@"text": textField.text.copy ?: @""});
+        NSString *text = textField.text.copy ?: @"";
+        self.css_textDidChange(@{@"text": text, @"length": @([self p_calculateLengthForText:text])});
     }
 }
 
@@ -271,8 +309,19 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     if (self.css_inputReturn) {
-        self.css_inputReturn(@{@"text": textField.text.copy ?: @""});
+        self.css_inputReturn(@{@"text": textField.text.copy ?: @"", @"ime_action": self.css_returnKeyType ?: @""});
     }
+    // 根据 autoHideKeyboardOnImeAction 属性决定是否收起键盘
+    // 默认值为 NO（不自动收起），如果设置为 YES 则自动收起键盘
+    if ([self.css_autoHideKeyboardOnImeAction boolValue]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [textField resignFirstResponder];
+        });
+    }
+    return YES;
+}
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
     return YES;
 }
 
@@ -283,8 +332,9 @@ NSString *const KRVFontWeightKey = @"fontWeight";
     NSDictionary *info = notify.userInfo;
     CGFloat keyboardHeight = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue].size.height;
     CGFloat duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] floatValue];
+    NSInteger curve = [[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
     if (self.css_keyboardHeightChange) {
-        self.css_keyboardHeightChange(@{@"height": @(keyboardHeight), @"duration": @(duration)});
+        self.css_keyboardHeightChange(@{@"height": @(keyboardHeight), @"duration": @(duration), @"curve": @(curve)});
     }
 }
 
@@ -292,8 +342,9 @@ NSString *const KRVFontWeightKey = @"fontWeight";
     // 键盘将要隐藏
     NSDictionary *info = notify.userInfo;
     CGFloat duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] floatValue];
+    NSInteger curve = [[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
     if (self.css_keyboardHeightChange) {
-        self.css_keyboardHeightChange(@{@"height": @(0), @"duration": @(duration)});
+        self.css_keyboardHeightChange(@{@"height": @(0), @"duration": @(duration), @"curve": @(curve)});
     }
 }
 
@@ -328,26 +379,124 @@ NSString *const KRVFontWeightKey = @"fontWeight";
 
 
 - (void)p_limitTextInput {
-    UITextField *textField = self;
+    UITextField *textView = self;
     // 判断是否存在高亮字符，不进行字数统计和字符串截断
-    UITextRange *selectedRange = textField.markedTextRange;
-    UITextPosition *position = [textField positionFromPosition:selectedRange.start offset:0];
+    UITextRange *selectedRange = textView.markedTextRange;
+    UITextPosition *position = [textView positionFromPosition:selectedRange.start offset:0];
     if (position) {
         return;
     }
-    NSInteger maxLength = [self.css_maxTextLength intValue];
-    if (maxLength == 0) {
+    NSInteger maxLength;
+    if (self.css_lengthLimitType == nil) { // 兼容旧版本行为
+        maxLength = [self p_legacyMaxInputLengthWithString:textView.attributedText.string];
+    } else {
+        maxLength = [self.css_maxTextLength integerValue];
+    }
+
+    if (maxLength <= 0) {
         return;
     }
-    if (textField.text.length > maxLength) {
-        NSRange range = [textField.text rangeOfComposedCharacterSequenceAtIndex:maxLength];
-        textField.text = [textField.text substringToIndex:range.location];
+    if ([self p_shouldTruncate:textView.attributedText maxLength:maxLength]) {
+        if (textView.attributedText) {
+            
+           // NSUInteger location = self.selectedTextRange.start.location;
+            NSUInteger location = [self offsetFromPosition:self.beginningOfDocument toPosition:self.selectedTextRange.start];
+            NSMutableAttributedString *truncatedAttributedString = [textView.attributedText mutableCopy];
+            NSUInteger atIndex = MAX(location - 1, 0);
+            NSUInteger deleteLength = 0;
+             
+            while ([self p_shouldTruncate:truncatedAttributedString maxLength:maxLength] && (atIndex < truncatedAttributedString.length && atIndex >= 0)) {
+                NSRange composedRange = [truncatedAttributedString.string rangeOfComposedCharacterSequenceAtIndex:atIndex]; // 避免切割emoji
+                if (composedRange.length == 0) {
+                    break;
+                }
+                [truncatedAttributedString deleteCharactersInRange:composedRange];
+                
+                atIndex = composedRange.location -1;
+                deleteLength += composedRange.length;
+            }
+            BOOL truncatedTail = NO;
+            while (truncatedAttributedString.length > 0 && [self p_shouldTruncate:truncatedAttributedString maxLength:maxLength]) {
+                NSRange range = [truncatedAttributedString.string rangeOfComposedCharacterSequenceAtIndex:truncatedAttributedString.length - 1];
+                if (range.length == 0) {
+                    break;
+                }
+                [truncatedAttributedString deleteCharactersInRange:range];
+                truncatedTail = YES;
+            }
+            if (truncatedTail) {
+                location = maxLength;
+                deleteLength = 0;
+            }
+
+            textView.attributedText = truncatedAttributedString;
+            UITextPosition *newPosition = [self positionFromPosition:self.beginningOfDocument offset:MAX(location - deleteLength, 0)];
+          
+            self.selectedTextRange = [self textRangeFromPosition:newPosition toPosition:newPosition];
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.selectedTextRange = [self textRangeFromPosition:newPosition toPosition:newPosition];
+            });
+
+        }
+       
         if (self.css_textLengthBeyondLimit) {
             self.css_textLengthBeyondLimit(@{});
         }
     }
 }
 
+- (NSUInteger)p_legacyMaxInputLengthWithString:(NSString *)string {
+    NSInteger maxLength = [self.css_maxTextLength intValue];
+    if (maxLength <= 0) {
+        return 0;
+    }
+    NSUInteger count = 0;
+    NSUInteger length = string.length;
+    NSUInteger i = 0;
+    for (; i < length; ) {
+        NSRange range = [string rangeOfComposedCharacterSequenceAtIndex:i];
+        count++;
+        i += range.length;
+        if (count >= maxLength)  {
+            break;
+        }
+    }
+    
+    return MAX(i, maxLength);
+}
+
+- (NSUInteger)p_calculateLengthForText:(NSString *)text {
+    if (self.css_lengthLimitType == nil) {
+        // 兼容旧版本行为
+        return [text kr_length];
+    }
+    switch ([self.css_lengthLimitType integerValue]) {
+        case 0: // BYTE
+            return [text kr_byteLength];
+        case 2: // VIRSUAL_WIDTH
+            return [text kr_visualWidth];
+        case 1: // CHARACTER
+        default:
+            return [text kr_length];
+    }
+}
+
+- (BOOL)p_shouldTruncate:(NSAttributedString *)attributedText maxLength:(NSInteger)maxLength {
+    if (self.css_lengthLimitType == nil) {
+        // 兼容旧版本行为
+        return attributedText.length > maxLength;
+    }
+    switch ([self.css_lengthLimitType integerValue]) {
+        case 0: // BYTE
+            return [attributedText.string kr_byteLength] > maxLength;
+        case 2: // VIRSUAL_WIDTH
+            return [attributedText.string kr_visualWidth] > maxLength;
+        case 1: // CHARACTER
+        default:
+            return [attributedText.string kr_length] > maxLength;
+    }
+}
 
 
 @end

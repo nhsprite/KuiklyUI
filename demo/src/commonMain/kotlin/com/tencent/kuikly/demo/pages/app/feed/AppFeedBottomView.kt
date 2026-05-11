@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,12 +23,33 @@ import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.ViewContainer
 import com.tencent.kuikly.core.base.attr.ImageUri
 import com.tencent.kuikly.core.directives.vbind
+import com.tencent.kuikly.core.module.CallbackRef
+import com.tencent.kuikly.core.module.NotifyModule
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.views.Image
 import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
+import com.tencent.kuikly.demo.pages.app.theme.ThemeManager
 
 internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBottomViewEvent>() {
-    
+
+    private var theme by observable(ThemeManager.getTheme())
+    private lateinit var eventCallbackRef: CallbackRef
+
+    override fun created() {
+        super.created()
+        eventCallbackRef = acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .addNotify(ThemeManager.SKIN_CHANGED_EVENT) { _ ->
+                theme = ThemeManager.getTheme()
+            }
+    }
+
+    override fun viewDestroyed() {
+        super.viewDestroyed()
+        acquireModule<NotifyModule>(NotifyModule.MODULE_NAME)
+            .removeNotify(ThemeManager.SKIN_CHANGED_EVENT, eventCallbackRef)
+    }
+
     override fun createEvent(): AppFeedBottomViewEvent {
         return AppFeedBottomViewEvent()
     }
@@ -57,7 +78,8 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                         alignSelfCenter()
                         resizeContain()
                         size(width = 22f, height = 22f)
-                        src(ImageUri.pageAssets("ic_home_reweet.png"))
+                        src(ImageUri.pageAssets("ic_home_forward.png"))
+                        tintColor(ctx.theme.colors.feedBottomIcon)
                     }
                 }
 
@@ -66,7 +88,7 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                         text("${ctx.attr.retweetNum}")
                         marginLeft(4f)
                         fontSize(13f)
-                        color(Color.BLACK)
+                        color(ctx.theme.colors.feedBottomText)
                     }
                 }
 
@@ -85,6 +107,7 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                         resizeContain()
                         size(width = 22f, height = 22f)
                         src(ImageUri.pageAssets("ic_home_comment.webp"))
+                        tintColor(ctx.theme.colors.feedBottomIcon)
                     }
                 }
 
@@ -93,7 +116,7 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                         text("${ctx.attr.commentNum}")
                         marginLeft(4f)
                         fontSize(13f)
-                        color(Color.BLACK)
+                        color(ctx.theme.colors.feedBottomText)
                     }
                 }
             }
@@ -116,6 +139,7 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                             } else {
                                 src(ImageUri.pageAssets("ic_home_like.webp"))
                             }
+                            tintColor(ctx.theme.colors.feedBottomIcon)
                         }
                     }
 
@@ -128,7 +152,7 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
                             }
                             marginLeft(4f)
                             fontSize(13f)
-                            color(Color.BLACK)
+                            color(ctx.theme.colors.feedBottomText)
                         }
                     }
 
@@ -151,11 +175,10 @@ internal class AppFeedBottomView: ComposeView<AppFeedBottomViewAttr, AppFeedBott
     }
 }
 
-
 internal class AppFeedBottomViewAttr : ComposeAttr() {
     var retweetNum = 0
     var commentNum = 0
-    var likeStatus = 0
+    var likeStatus by observable(0)
     var likeNum = 0
 }
 

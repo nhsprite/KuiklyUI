@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,12 +17,18 @@
 
 NS_ASSUME_NONNULL_BEGIN
 typedef void (^KRHttpResponse)(NSDictionary * _Nullable result , NSError * _Nullable error);
-typedef void (^KRKotlinHttpResponse)(NSString * _Nullable result , NSURLResponse * _Nullable response, NSError * _Nullable error);
+typedef void (^KRKotlinHttpResponse)(NSData * _Nullable result , NSURLResponse * _Nullable response, NSError * _Nullable error);
 typedef void (^KRHttpFileResponse)(NSString * _Nullable path , NSError * _Nullable error);
 @interface KRHttpRequestTool : NSObject
 
 + (void)downloadWithUrl:(NSString * )url param:(NSDictionary * _Nullable)param sotrePath:(NSString * )path responseBlock:(KRHttpFileResponse)response;
-+ (void)requestWithMethod:(NSString *)method url:(NSString *)url param:(NSDictionary *)param headers:(NSDictionary *)headerDics timeout:(float)timeout cookie:(NSString * _Nullable)cookie responseBlock:(KRKotlinHttpResponse)response;
++ (void)requestWithMethod:(NSString *)method url:(NSString *)url param:(NSDictionary *)param binaryData:(NSData * _Nullable)binaryData headers:(NSDictionary *)headerDics timeout:(float)timeout cookie:(NSString * _Nullable)cookie responseBlock:(KRKotlinHttpResponse)response;
+
+/// Sends an HTTP request using the provided raw JSON body string directly, preserving key ordering.
+/// When content-type is application/json and rawBodyString is non-nil, it is used as the POST body
+/// instead of re-serializing the param NSDictionary (which does not guarantee key order).
+/// This ensures the request body matches the data used to compute request signatures on the Kotlin side.
++ (void)requestWithMethod:(NSString *)method url:(NSString *)url param:(NSDictionary *)param rawBodyString:(NSString * _Nullable)rawBodyString binaryData:(NSData * _Nullable)binaryData headers:(NSDictionary *)headerDics timeout:(float)timeout cookie:(NSString * _Nullable)cookie responseBlock:(KRKotlinHttpResponse)response;
 
 
 
@@ -35,7 +41,7 @@ typedef void (^KRHttpFileResponse)(NSString * _Nullable path , NSError * _Nullab
 + (NSURLSessionDataTask *)requestWithURLRequest:(NSURLRequest *)request completionHandler:(void (^)(NSDictionary * _Nullable json, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
 + (void)downloadWithUrl:(NSString * )url responseBlock:(KRHttpFileResponse)response;
 + (void)requestContentLengthWithUrl:(NSString *)url completionHandler:(void (^)(long long contentLength, NSError * _Nullable error))completionHandler;
-+ (NSURLSessionDataTask *)kotlinRequestWithURLRequest:(NSURLRequest *)request completionHandler:(void (^)(NSString * _Nullable json, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
++ (NSURLSessionDataTask *)kotlinRequestWithURLRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
 @end
 
 NS_ASSUME_NONNULL_END

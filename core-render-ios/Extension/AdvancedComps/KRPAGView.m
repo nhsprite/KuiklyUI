@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -34,6 +34,7 @@ NSString *const KRPagAssetsPrefix = @"assets://";
 @property (nonatomic, strong) NSString *css_src;
 @property (nonatomic, strong) NSNumber *css_autoPlay;
 @property (nonatomic, strong) NSNumber *css_repeatCount;
+@property (nonatomic, strong) NSNumber *css_scaleMode;
 @property (nonatomic, strong) NSString *css_replaceTextLayerContent;
 @property (nonatomic, strong) NSString *css_replaceImageLayerContent;
 
@@ -98,6 +99,9 @@ static PAGViewCreator gPagViewCreator;
 
 - (void)hrv_callWithMethod:(NSString *)method params:(NSString *)params callback:(KuiklyRenderCallback)callback {
     KUIKLY_CALL_CSS_METHOD;
+    if ([_pagView respondsToSelector:@selector(kr_callWithMethod:params:)]) {
+        [_pagView kr_callWithMethod:method params:params];
+    }
 }
 
 #pragma mark - Setters
@@ -138,6 +142,13 @@ static PAGViewCreator gPagViewCreator;
     }
 }
 
+- (void)setCss_scaleMode:(NSNumber *)css_scaleMode {
+    _css_scaleMode = css_scaleMode;
+    
+    int scaleMode = (int)[KRConvertUtil NSInteger:css_scaleMode];
+    [self.pagView setScaleMode:scaleMode];
+}
+
 - (void)setCss_replaceTextLayerContent:(NSString *)css_replaceTextLayerContent {
     NSArray *contents = [css_replaceTextLayerContent componentsSeparatedByString:@","];
     if (contents.count != 2) {
@@ -173,6 +184,14 @@ static PAGViewCreator gPagViewCreator;
 - (void)css_stop:(NSDictionary *)args  {
     _css_autoPlay = @(NO);
     [self.pagView stop];
+}
+
+- (void)css_setProgress:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    double value = [params[@"value"] doubleValue];
+    if ([self.pagView respondsToSelector:@selector(setProgress:)]) {
+        [self.pagView setProgress:value];
+    }
 }
 
 #pragma mark - override
@@ -308,7 +327,7 @@ static PAGViewCreator gPagViewCreator;
             continue;
         }
         id<PAGImageLayerProtocol> imageLayer = (id<PAGImageLayerProtocol>)layer;
-        id<PAGImageProtocol> pagImage = [((id<PAGImageProtocol>)NSClassFromString(@"PAGImage")) fromPath:filePath];
+        id<PAGImageProtocol> pagImage = [((id<PAGImageProtocol>)NSClassFromString(@"PAGImage")) FromPath:filePath];
         
         if(!pagImage) {
             [KRLogModule logError:[NSString stringWithFormat:@"替换 imageLayer= %@ 失败，请检查该路径 %@ 的图片素材是否存在", layerName, filePath]];
@@ -326,7 +345,7 @@ static PAGViewCreator gPagViewCreator;
     NSString *pathWithoutExtension = [css_src substringWithRange:subRange];
     
     KuiklyContextParam *contextParam = ((KuiklyRenderView *)self.hr_rootView).contextParam;
-    url = [contextParam.contextMode urlForFileName:pathWithoutExtension extension:fileExtension];
+    url = [contextParam urlForFileName:pathWithoutExtension extension:fileExtension];
     return url ? url.path : @"";
 }
 

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,11 +15,14 @@
 
 package com.tencent.kuikly.core.render.android.expand.module
 
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import com.tencent.kuikly.core.render.android.adapter.HRImageLoadOption
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderLog
 import com.tencent.kuikly.core.render.android.css.ktx.toJSONObjectSafely
+import com.tencent.kuikly.core.render.android.css.ktx.toPxF
 import com.tencent.kuikly.core.render.android.expand.component.image.FetchImageCallback
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderBaseModule
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
@@ -34,6 +37,19 @@ import java.util.concurrent.TimeUnit
 class KRMemoryCacheModule : KuiklyRenderBaseModule() {
 
     private val cacheMap = ConcurrentHashMap<String, Any>()
+
+    override fun onDestroy() {
+        // 释放未回收的bitmap对象
+        for (value in cacheMap.values) {
+            if (value is BitmapDrawable) {
+                val bitmap = value.bitmap
+                if (bitmap != null && !bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            }
+        }
+        cacheMap.clear()
+    }
 
     override fun call(method: String, params: String?, callback: KuiklyRenderCallback?): Any? {
         return when (method) {
@@ -71,13 +87,17 @@ class KRMemoryCacheModule : KuiklyRenderBaseModule() {
     private fun cacheImage(params: String?, callback: KuiklyRenderCallback?): JSONObject {
         val json = params.toJSONObjectSafely()
         val src = json.optString("src", "")
+        val imageParams = json.optJSONObject("imageParams")
         val cacheKey = generateCacheKey(src)
         val result = JSONObject()
-        if (cacheMap.containsKey(cacheKey)) {
+        val drawable = cacheMap[cacheKey]
+        if (drawable is Drawable) {
             KuiklyRenderLog.d("KRMemory", "cacheImage key exist $cacheKey")
             result.put("state", "Complete")
             result.put("errorCode", 0)
             result.put("cacheKey", cacheKey)
+            result.put("width", drawable.width)
+            result.put("height", drawable.height)
             callback?.invoke(result)
             return result
         }
@@ -90,15 +110,18 @@ class KRMemoryCacheModule : KuiklyRenderBaseModule() {
             val sync = json.optInt("sync") == 1
             val option = HRImageLoadOption(src, -1, -1, false, ImageView.ScaleType.FIT_XY)
             val notify = CountDownLatch(1)
-            imageLoader.fetchImageAsync(option, generateCacheImageCallback(this, cacheKey, notify, callback))
+            imageLoader.fetchImageAsync(option, imageParams, generateCacheImageCallback(this, cacheKey, notify, callback))
             if (sync) {
                 // wait
                 val flag = notify.await(5, TimeUnit.SECONDS)
                 result.put("state", "Complete")
                 if (flag) {
-                    if (cacheMap.containsKey(cacheKey)) {
+                    val drawable = cacheMap[cacheKey]
+                    if (drawable is Drawable) {
                         result.put("errorCode", 0)
                         result.put("cacheKey", cacheKey)
+                        result.put("width", drawable.width)
+                        result.put("height", drawable.height)
                     } else {
                         result.put("errorCode", -1)
                         result.put("errorMsg", "fetch failed")
@@ -108,9 +131,9 @@ class KRMemoryCacheModule : KuiklyRenderBaseModule() {
                     result.put("errorMsg", "fetch timeout")
                 }
             } else {
-                result.put("state", "Complete")
-                result.put("errorCode", -1)
-                result.put("errorMsg", "async call, should get result from callback")
+                result.put("state", "InProgress")
+                result.put("errorCode", 0)
+                result.put("errorMsg", "loading async")
             }
             return result
         } else {
@@ -121,6 +144,34 @@ class KRMemoryCacheModule : KuiklyRenderBaseModule() {
             return result
         }
     }
+
+    private fun generateCacheImageCallback(
+        module: KRMemoryCacheModule,
+        cacheKey: String,
+        notify: CountDownLatch?,
+        callback: KuiklyRenderCallback?
+    ): FetchImageCallback {
+        return { drawable ->
+            val result = JSONObject()
+            result.put("state", "Complete")
+            if (drawable != null) {
+                module.cacheMap[cacheKey] = drawable
+                result.put("errorCode", 0)
+                result.put("cacheKey", cacheKey)
+                result.put("width", drawable.width)
+                result.put("height", drawable.height)
+            } else {
+                result.put("errorCode", -1)
+                result.put("errorMsg", "fetch failed")
+            }
+            callback?.invoke(result)
+            notify?.countDown()
+        }
+    }
+
+    private inline val Drawable.width get() = kuiklyRenderContext?.getImageLoader()?.getImageWidth(this) ?: 0f
+
+    private inline val Drawable.height get() = kuiklyRenderContext?.getImageLoader()?.getImageHeight(this) ?: 0f
 
     companion object {
         const val MODULE_NAME = "KRMemoryCacheModule"
@@ -136,28 +187,6 @@ class KRMemoryCacheModule : KuiklyRenderBaseModule() {
                 src.hashCode().toString()
             } else {
                 KRCodecModule.base64Encode(src)
-            }
-        }
-
-        private fun generateCacheImageCallback(
-            module: KRMemoryCacheModule,
-            cacheKey: String,
-            notify: CountDownLatch?,
-            callback: KuiklyRenderCallback?
-        ): FetchImageCallback {
-            return { drawable ->
-                val result = JSONObject()
-                result.put("state", "Complete")
-                if (drawable != null) {
-                    module.cacheMap[cacheKey] = drawable
-                    result.put("errorCode", 0)
-                    result.put("cacheKey", cacheKey)
-                } else {
-                    result.put("errorCode", -1)
-                    result.put("errorMsg", "fetch failed")
-                }
-                callback?.invoke(result)
-                notify?.countDown()
             }
         }
 

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -40,8 +40,10 @@ import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.drawable.KRCSSBackgroundDrawable
 import com.tencent.kuikly.core.render.android.css.ktx.frameHeight
 import com.tencent.kuikly.core.render.android.css.ktx.frameWidth
+import com.tencent.kuikly.core.render.android.css.ktx.getDisplayMetrics
 import com.tencent.kuikly.core.render.android.css.ktx.removeFromParent
 import com.tencent.kuikly.core.render.android.css.ktx.toColor
+import com.tencent.kuikly.core.render.android.css.ktx.toJSONObjectSafely
 import com.tencent.kuikly.core.render.android.css.ktx.toNumberFloat
 import com.tencent.kuikly.core.render.android.css.ktx.toPxI
 import com.tencent.kuikly.core.render.android.expand.component.blur.RenderScriptBlur
@@ -51,6 +53,7 @@ import com.tencent.kuikly.core.render.android.expand.module.KRMemoryCacheModule
 import com.tencent.kuikly.core.render.android.export.IKuiklyRenderViewExport
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import com.tencent.kuikly.core.render.android.scheduler.KRSubThreadScheduler
+import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.roundToInt
@@ -79,6 +82,12 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
      * 是否加载为.9图
      */
     private var isNinePatchDrawable = false
+
+    /**
+     * 图片额外参数
+     */
+    private var imageParams: JSONObject? = null
+
     /**
      * 高斯模糊半径
      */
@@ -106,7 +115,6 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
      */
     private var loadFailureCallback: KuiklyRenderCallback? = null
 
-
     /*
      * 源图片
      */
@@ -126,7 +134,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         return when (propKey) {
             PROP_SRC -> setSrc(propValue as String)
             PROP_RESIZE -> setResize(propValue as String)
-            PROP_BLUR_RADIUS -> setBlurRadius(propValue as Float)
+            PROP_BLUR_RADIUS -> setBlurRadius(propValue)
             PROP_TINT_COLOR -> setTintColor(propValue)
             PROP_MASK_LINEAR_GRADIENT -> setMaskLinearGradient(propValue as String)
             PROP_DOT_NINE_IMAGE -> setIsNineDotImage(propValue)
@@ -134,6 +142,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
             PROP_EVENT_LOAD_RESOLUTION -> setLoadResolutionCallback(propValue)
             PROP_EVENT_LOAD_FAILURE->setLoadFailureCallback(propValue)
             PROP_CAP_INSETS -> setCapInsets(propValue as String)
+            PROP_IMAGE_PARAMS -> setImageParams(propValue as String)
             else -> super.setProp(propKey, propValue)
         }
     }
@@ -163,6 +172,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
             PROP_EVENT_LOAD_RESOLUTION -> resetLoadResolutionCallback()
             PROP_EVENT_LOAD_FAILURE -> resetLoadFailureCallback()
             PROP_CAP_INSETS -> resetCapInsets()
+            PROP_IMAGE_PARAMS -> resetImageParams()
             else -> super.resetProp(propKey)
         }
     }
@@ -185,18 +195,27 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         paintMaskGradient?.also {
             saveCount = canvas.saveLayer(0f, 0f, frameWidth.toFloat(), frameHeight.toFloat(), null)
         }
+        val checkpoint: Int = if (hasCustomClipPath()) {
+            canvas.save()
+        } else {
+            -1
+        }
         drawCommonDecoration(frameWidth, frameHeight, canvas)
         if (capInsetsValid()) {
             drawable?.also {
-                val density = resources.displayMetrics.density
-                val drawableWidth = if (it.intrinsicWidth > 0) (it.intrinsicWidth * density).roundToInt() else frameWidth
-                val drawableHeight = if (it.intrinsicHeight > 0) (it.intrinsicHeight * density).roundToInt() else frameHeight
+                val loader = kuiklyRenderContext?.getImageLoader()
+                val density = kuiklyRenderContext.getDisplayMetrics().density
+                val drawableWidth = loader?.getImageWidth(it)?.roundToInt()?.takeIf { w -> w > 0 } ?: frameWidth
+                val drawableHeight = loader?.getImageHeight(it)?.roundToInt()?.takeIf { h -> h > 0 } ?: frameHeight
                 it.setBounds(0, 0, drawableWidth, drawableHeight)
                 NinePatchHelper.draw(canvas, { c, dr -> dr.draw(c) }, it, drawableWidth, drawableHeight, density,
                     frameWidth, frameHeight, capInsets!!)
             }
         } else {
             super.onDraw(canvas)
+        }
+        if (checkpoint != -1) {
+            canvas.restoreToCount(checkpoint)
         }
         drawCommonForegroundDecoration(frameWidth, frameHeight, canvas)
         paintMaskGradient?.also {// 绘制渐变遮罩
@@ -215,41 +234,50 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
     }
 
     private fun updateDrawableImage(drawable: Drawable?) {
-        if (drawable != null && tintColor != null) {
-            val tintDrawable = drawable.mutate()
-            tintDrawable.setTint(tintColor as Int)
-            superSetImage(tintDrawable)
-        } else if (drawable != null && blurRadius > 0f) {
-            val tBlurRadius = this.blurRadius
-            val tScr = this.src
-            // drawable
+        if (drawable == null) {
+            superSetImage(null)
+            return
+        }
+        // 创建独立副本，避免修改 adapter 缓存中的共享 drawable：
+        // - Animatable (GIF): 隔离 stop()/start() 动画状态
+        // - tintColor: 隔离 setTint() 染色状态
+        val safeDrawable = if (drawable is Animatable || tintColor != null) {
+            drawable.copyDrawable()
+        } else {
+            drawable
+        }
+        // 应用染色
+        if (tintColor != null) {
+            safeDrawable.setTint(tintColor as Int)
+        }
+        // 应用高斯模糊（异步处理，blur 完成后再 superSetImage）
+        if (blurRadius > 0f) {
+            val tBlurRadius = blurRadius
+            val tSrc = src
             KRSubThreadScheduler.scheduleTask(0) {
-                // 高斯模糊
-                val blurDrawable = RenderScriptBlur.blurImage(drawable, context, tBlurRadius)
+                val blurDrawable = RenderScriptBlur.blurImage(safeDrawable, context, tBlurRadius)
                 runOnUiThread {
-                    drawable.setTintList(null)
-                    // 记录结束时间并计算耗时
-                    if (this.src == tScr && tBlurRadius == this.blurRadius) {
+                    if (src == tSrc && blurRadius == tBlurRadius) {
                         superSetImage(blurDrawable)
                     }
                 }
             }
-        } else {
-            drawable?.setTintList(null)
-            superSetImage(drawable)
+            return
         }
+        superSetImage(safeDrawable)
     }
-
 
     private fun superSetImage(drawable: Drawable?) {
         super.setImageDrawable(drawable)
         if (drawable is Animatable) {
+            if (drawable.isRunning) {
+                drawable.stop() // 先停止再启动，确保GIF从第一帧开始播放
+            }
             drawable.start()
         }
         fireLoadSuccessCallback(drawable)
         fireLoadResolutionCallback(drawable)
     }
-
 
     private fun resetSrc(): Boolean {
         src = KRCssConst.EMPTY_STRING
@@ -305,9 +333,9 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         return true
     }
 
-    private fun setBlurRadius(blurRadius: Float): Boolean {
+    private fun setBlurRadius(blurRadius: Any): Boolean {
         // image
-        this.blurRadius = blurRadius
+        this.blurRadius = blurRadius.toNumberFloat()
         updateDrawableImage(originDrawable)
         return true
     }
@@ -336,7 +364,6 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         }
     }
 
-
     private fun setLoadSuccessCallback(propValue: Any): Boolean {
         this.loadSuccessCallback = propValue as KuiklyRenderCallback
         fireLoadSuccessCallback(drawable)
@@ -362,6 +389,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         if (src == url) {
             return true
         }
+        stopAnimatable() // 停止当前动画，防止GIF切换时卡住
         src = url
         setImageDrawable(null) // 重置drawable，防止动态更新src时, Drawable错乱
 
@@ -380,7 +408,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         val tempSrc = src
         if (isBase64Src()) {
             loadBase64Image(tempSrc)
-        } else {
+        } else if (tempSrc.isNotEmpty()) {
             fetchDrawable(createImageLoadOption(tempSrc)) { drawable ->
                 runOnUiThread {
                     setResultImageDrawable(tempSrc, drawable)
@@ -497,11 +525,12 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
             return
         }
         val cb = loadResolutionCallback ?: return
-        val density = resources.displayMetrics.density
-        cb.invoke(mapOf(
-            IMAGE_WIDTH to drawable.intrinsicWidth * density,
-            IMAGE_HEIGHT to drawable.intrinsicHeight * density
-        ))
+        kuiklyRenderContext?.getImageLoader()?.run {
+            cb.invoke(mapOf(
+                IMAGE_WIDTH to getImageWidth(drawable),
+                IMAGE_HEIGHT to getImageHeight(drawable)
+            ))
+        }
     }
 
     private fun fireLoadFailureCallback() {
@@ -521,10 +550,10 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
     private fun fetchDrawable(imageLoadOption: HRImageLoadOption, callback: (drawable: Drawable?) -> Unit) {
         if (kuiklyRenderContext?.kuiklyRenderRootView != null && shouldWaitViewDidLoad) {
             kuiklyRenderContext?.kuiklyRenderRootView?.performWhenViewDidLoad {
-                kuiklyRenderContext?.getImageLoader()?.fetchImageAsync(imageLoadOption, callback)
+                kuiklyRenderContext?.getImageLoader()?.fetchImageAsync(imageLoadOption, imageParams, callback)
             }
         } else {
-            kuiklyRenderContext?.getImageLoader()?.fetchImageAsync(imageLoadOption, callback)
+            kuiklyRenderContext?.getImageLoader()?.fetchImageAsync(imageLoadOption, imageParams, callback)
         }
     }
 
@@ -532,10 +561,10 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         capInsets = param.split(" ").takeIf { it.size >= 4 }?.let {
             try {
                 // "$top $left $bottom $right"
-                val top = it[0].toFloat().toPxI()
-                val left = it[1].toFloat().toPxI()
-                val bottom = it[2].toFloat().toPxI()
-                val right = it[3].toFloat().toPxI()
+                val top = kuiklyRenderContext.toPxI(it[0].toFloat())
+                val left = kuiklyRenderContext.toPxI(it[1].toFloat())
+                val bottom = kuiklyRenderContext.toPxI(it[2].toFloat())
+                val right = kuiklyRenderContext.toPxI(it[3].toFloat())
                 Insets(left, top, right, bottom)
             } catch (e: NumberFormatException) {
                 null
@@ -554,6 +583,16 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         return capInsets?.isZero() == false && scaleType == ScaleType.FIT_XY
     }
 
+    private fun setImageParams(params: String): Boolean {
+        imageParams = params.toJSONObjectSafely()
+        return true
+    }
+
+    private fun resetImageParams(): Boolean {
+        imageParams = null
+        return true
+    }
+
     companion object {
         const val VIEW_NAME = "KRImageView"
         const val PROP_SRC = "src" // 外部用引用到，因此不是private
@@ -566,6 +605,7 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         private const val PROP_EVENT_LOAD_RESOLUTION = "loadResolution"
         private const val PROP_EVENT_LOAD_FAILURE = "loadFailure"
         private const val PROP_CAP_INSETS = "capInsets"
+        private const val PROP_IMAGE_PARAMS = "imageParams"
         private const val RESIZE_MODE_COVER = "cover"
         private const val RESIZE_MODE_CONTAIN = "contain"
         private const val RESIZE_MODE_STRETCH = "stretch"
@@ -575,6 +615,13 @@ open class KRImageView(context: Context) : ImageView(context), IKuiklyRenderView
         private const val BASE64_IMAGE_PREFIX = "data:image"
         private const val IMAGE_WIDTH = "imageWidth"
         private const val IMAGE_HEIGHT = "imageHeight"
+
+        /**
+         * 拷贝 drawable 副本，避免修改 adapter 缓存中的原始 drawable
+         */
+        private fun Drawable.copyDrawable(): Drawable {
+            return constantState?.newDrawable()?.mutate() ?: this
+        }
     }
 }
 

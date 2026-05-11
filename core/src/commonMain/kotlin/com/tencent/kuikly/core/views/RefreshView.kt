@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,12 +21,13 @@ import com.tencent.kuikly.core.layout.undefined
 import com.tencent.kuikly.core.timer.setTimeout
 
 /**
- * 在 ListView 中添加一个 RefreshView 实例。
+ * 在 Scroller 中添加一个 RefreshView 实例。
  * @param init 一个 RefreshView.() -> Unit 函数，用于初始化 RefreshView 的属性和子视图。
  */
-fun ListView<*, *>.Refresh(init: RefreshView.() -> Unit) {
+fun ScrollerView<*, *>.Refresh(init: RefreshView.() -> Unit) {
     addChild(RefreshView(), init)
 }
+
 
 class RefreshAttr : ContainerAttr() {
     var refreshEnable = true
@@ -64,12 +65,11 @@ enum class RefreshViewState {
 }
 class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventObserver {
 
-
     /** 手动调用刷新 */
     fun beginRefresh(animated: Boolean = true) {
         performTaskWhenRenderViewDidLoad {
             if (refreshState != RefreshViewState.REFRESHING) {
-                listView?.setContentOffset(0f, -flexNode.layoutFrame.height, animated = animated)
+                scrollerView?.setContentOffset(0f, -flexNode.layoutFrame.height, animated = animated)
                 refreshState = RefreshViewState.REFRESHING
             }
         }
@@ -84,20 +84,18 @@ class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventOb
         }
     }
 
-    private val listView: ListView<*, *>?
-        get() = (parent?.parent as? ListView<*, *>)
-
+    private val scrollerView: ScrollerView<*, *>?
+        get() = (parent?.parent as? ScrollerView<*, *>)
 
     private var contentInsetTop: Float = 0f
         set(value) {
-            listView?.setContentInset(top = value, animated = true)
+            scrollerView?.setContentInset(top = value, animated = true)
         }
 
     var contentInsetTopWhenEndDrag: Float = 0f
         set(value) {
-            listView?.setContentInsetWhenEndDrag(top = value)
+            scrollerView?.setContentInsetWhenEndDrag(top = value)
         }
-
 
     var refreshState: RefreshViewState = RefreshViewState.IDLE
         set(value) {
@@ -107,7 +105,6 @@ class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventOb
                 handleStateDidChange(value, oldState)
             }
         }
-
 
     override fun didInit() {
         super.didInit()
@@ -120,12 +117,12 @@ class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventOb
 
     override fun didMoveToParentView() {
         super.didMoveToParentView()
-        listView?.addScrollerViewEventObserver(this)
+        scrollerView?.addScrollerViewEventObserver(this)
     }
 
     override fun willRemoveFromParentView() {
         super.willRemoveFromParentView()
-        listView?.removeScrollerViewEventObserver(this)
+        scrollerView?.removeScrollerViewEventObserver(this)
     }
 
     override fun createAttr(): RefreshAttr {
@@ -190,7 +187,7 @@ class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventOb
         if (newState == RefreshViewState.IDLE && oldState == RefreshViewState.REFRESHING) {
             contentInsetTop = 0f
             contentInsetTopWhenEndDrag = 0f
-            if ((listView?.curOffsetY ?: 0f) >= 0) { // 分发状态变化
+            if ((scrollerView?.curOffsetY ?: 0f) >= 0) { // 分发状态变化
                 dispatchRefreshStateChanged(RefreshViewState.IDLE)
             } else {
                 setTimeout(200) {
@@ -216,7 +213,3 @@ class RefreshView : ViewContainer<RefreshAttr, RefreshEvent>(), IListViewEventOb
         event.refreshStateDidChangeHandlerFn?.invoke(state)
     }
 }
-
-
-
-

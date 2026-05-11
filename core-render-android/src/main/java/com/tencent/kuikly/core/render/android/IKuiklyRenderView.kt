@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,6 +23,7 @@ import android.view.ViewGroup
 import com.tencent.kuikly.core.render.android.context.KuiklyRenderCoreExecuteModeBase
 import com.tencent.kuikly.core.render.android.exception.ErrorReason
 import com.tencent.kuikly.core.render.android.expand.component.image.KRImageLoader
+import com.tencent.kuikly.core.render.android.expand.component.text.TypeFaceLoader
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderBaseModule
 import com.tencent.kuikly.core.render.android.export.IKuiklyRenderModuleExport
 import com.tencent.kuikly.core.render.android.export.IKuiklyRenderShadowExport
@@ -145,6 +146,12 @@ interface IKuiklyRenderView {
      * @param data
      */
     fun dispatchOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?)
+
+    /**
+     * 是否开启debug日志
+     * @return 是否
+     */
+    fun isDebugLogEnable(): Boolean
 }
 
 /**
@@ -166,6 +173,17 @@ interface IKuiklyRenderContext {
      * 初始化 KuiklyContextParams
      */
     fun initContextParams(contextParams: KuiklyContextParams)
+
+    /**
+     * 替换当前[IKuiklyRenderContext]
+     * @param newContext 新的android上下文
+     */
+    fun replaceContext(newContext: Context)
+
+    /**
+     * 页面的单元转换是否由宿主外部决定
+     */
+    fun useHostDisplayMetrics(): Boolean
 
     /**
      * 根据key获取关联在[View]的数据
@@ -225,6 +243,11 @@ interface IKuiklyRenderContext {
      * 获取图片加载器
      */
     fun getImageLoader(): KRImageLoader?
+
+    /**
+     * 获取TypeFace加载器
+     */
+    fun getTypeFaceLoader(): TypeFaceLoader?
 
 }
 
@@ -407,5 +430,15 @@ interface IKuiklyRenderLifecycleCallback {
      * @param data 数据
      */
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {}
+
+}
+
+/**
+ * KuiklyyRenderContext的Wrapper
+ * 提供kuiklyRenderContext的引用
+ */
+interface IKuiklyRenderContextWrapper {
+
+    var kuiklyRenderContext: IKuiklyRenderContext?
 
 }

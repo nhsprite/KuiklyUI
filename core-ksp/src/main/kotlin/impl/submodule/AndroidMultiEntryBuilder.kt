@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,7 +23,7 @@ import com.squareup.kotlinpoet.TypeSpec
 import impl.AndroidTargetEntryBuilder
 import impl.PageInfo
 
-class AndroidMultiEntryBuilder(private val isMainModule: Boolean, private val subModules: String, private val moduleId: String) : AndroidTargetEntryBuilder() {
+class AndroidMultiEntryBuilder(catchException: Boolean, private val isMainModule: Boolean, private val subModules: String, private val moduleId: String) : AndroidTargetEntryBuilder(catchException) {
     override fun build(builder: FileSpec.Builder, pagesAnnotations: List<PageInfo>) {
         if (!isMainModule) {
             builder.addType(
@@ -37,6 +37,7 @@ class AndroidMultiEntryBuilder(private val isMainModule: Boolean, private val su
                         .addSuperinterface(ClassName("com.tencent.kuikly.core", "IKuiklyCoreEntry"))
                         .addProperty(createHadRegisterNativeBridgeProperty())
                         .addProperty(createDelegateProperty())
+                        .addFunction(createCatchExceptionFuncSpec())
                         .addFunction(createCallKtMethodFuncSpec())
                         .addFunction(createPagesFuncSpec(pagesAnnotations))
                         .build()

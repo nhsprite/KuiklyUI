@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,19 +16,17 @@
 package com.tencent.kuikly.core.render.android.expand.component
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
-import android.util.ArrayMap
 import android.view.View
-import android.view.ViewGroup
+import android.widget.ImageView
+import com.tencent.kuikly.core.render.android.adapter.HRImageLoadOption
 import com.tencent.kuikly.core.render.android.adapter.IAPNGViewAnimationListener
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderAdapterManager
+import com.tencent.kuikly.core.render.android.css.ktx.frameHeight
+import com.tencent.kuikly.core.render.android.css.ktx.frameWidth
 import com.tencent.kuikly.core.render.android.expand.module.KRCodecModule
-import com.tencent.kuikly.core.render.android.expand.module.KRNetworkModule
 import com.tencent.kuikly.core.render.android.expand.vendor.KRFileManager
 import com.tencent.kuikly.core.render.android.export.KuiklyRenderCallback
 import java.io.File
-
 
 class KRAPNGView(context: Context) : KRView(context), IAPNGViewAnimationListener {
     private var src = ""
@@ -97,7 +95,6 @@ class KRAPNGView(context: Context) : KRView(context), IAPNGViewAnimationListener
     override fun onAnimationEnd(apngView: View) {
         animationEndCallback?.invoke(mapOf<String, Any>())
     }
-
 
     /**
      * 获取(下载)cdnUrl对应的pag文件接口
@@ -201,7 +198,9 @@ class KRAPNGView(context: Context) : KRView(context), IAPNGViewAnimationListener
     }
 
     private fun setFilePath(filePath: String) {
-        apngView?.setFilePath(filePath)
+        val apngImageLoadOption = HRImageLoadOption(filePath, frameWidth, frameHeight, false, ImageView.ScaleType.FIT_CENTER)
+        kuiklyRenderContext?.getImageLoader()?.convertAssetsPathIfNeed(apngImageLoadOption)
+        apngView?.setFilePath(apngImageLoadOption.src)
         hadFilePath = true
     }
 
@@ -221,7 +220,6 @@ class KRAPNGView(context: Context) : KRView(context), IAPNGViewAnimationListener
             fileLoadLazyTasks.clear()
         }
     }
-
 
     companion object {
         private const val SRC = "src"

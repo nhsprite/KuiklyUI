@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,6 +19,7 @@
 NS_ASSUME_NONNULL_BEGIN
 @class UIView;
 @class KuiklyRenderView;
+@class KuiklyContextParam;
 /*
  * 回调给Kotlin侧的闭包
  * @param result 数据(类型可为NSDictionary, NSArray, NSString, NSNumber, NSData, 注: NSDictionary在Kotlin侧对应为String类型)
@@ -35,6 +36,10 @@ typedef void (^KuiklyRenderCallback)(id _Nullable result);
  * @brief 当前所在根视图
  */
 @property (nonatomic, weak) KuiklyRenderView *hr_rootView;
+/*
+ * @brief
+ */
+@property (nonatomic, strong) KuiklyContextParam *hr_contextParam;
 
 /*
  * @brief Kotlin侧调用当前module的实例方法出发该回调(多线程调用)

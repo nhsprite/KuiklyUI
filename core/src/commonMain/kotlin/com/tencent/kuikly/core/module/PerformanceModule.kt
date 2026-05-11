@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -139,7 +139,6 @@ data class LaunchData(
         private const val KEY_ON_CREATE_INSTANCE_COST = "createInstanceCost"
         private const val KEY_ON_RENDER_COST = "renderCost"
 
-
         fun fromJson(jsonObject: JSONObject?): LaunchData? {
             if (jsonObject != null) {
                 return LaunchData(
@@ -214,6 +213,5 @@ data class MemoryData(
                 " appPeak=$appPeak," +
                 " appAvg=$appAvg)"
     }
-
 
 }

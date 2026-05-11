@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -45,6 +45,7 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
 @property (nonatomic, strong) NSNumber *fontSize;
 @property (nonatomic, strong) NSNumber *fontFamily;
 @property (nonatomic, strong) NSString *textAlign;
+@property (nonatomic, strong) NSMutableArray<NSString *> *saveStack;
 @end
 
 @implementation KRCanvasView
@@ -54,10 +55,21 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     if ([super initWithFrame:frame]) {
         self.backgroundColor = [UIColor clearColor];
         _path = CGPathCreateMutable();
+        _saveStack = [NSMutableArray array];
+#if TARGET_OS_OSX
+        // macOS: 必须启用 layer-backed 才能使用 layer.mask
+        self.wantsLayer = YES;
+#endif
     }
     return self;
 }
 
+#if TARGET_OS_OSX // [macOS]
+- (BOOL)isFlipped {
+    // macOS 上使用 iOS 风格坐标系（左上角为原点），确保 clipPath/border 路径方向正确
+    return YES;
+}
+#endif // [macOS]
 
 - (void)hrv_callWithMethod:(NSString *)method params:(NSString *)params callback:(KuiklyRenderCallback)callback {
     KUIKLY_CALL_CSS_METHOD;
@@ -67,6 +79,40 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
 - (void)hrv_setPropWithKey:(NSString * _Nonnull)propKey propValue:(id _Nonnull)propValue {
     KUIKLY_SET_CSS_COMMON_PROP;
 }
+
+#if TARGET_OS_OSX // [macOS]
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    [self p_syncClipPathMaskIfNeed_macOS];
+}
+
+/**
+ * macOS: layer-backed 视图在使用 drawRect: 时，系统可能在绘制周期中重置 layer.mask
+ * 参照 KRImageView 的做法，在每次 layoutSubviews 中重新创建并设置 CSSClipPathLayer
+ */
+- (void)p_syncClipPathMaskIfNeed_macOS {
+    
+    if (CGSizeEqualToSize(self.frame.size, CGSizeZero)) {
+        return;
+    }
+    
+    // 检查是否已经有正确的 mask 类型
+    if (self.layer.mask && [self.layer.mask isKindOfClass:NSClassFromString(@"CSSClipPathLayer")]) {
+        if (CGRectEqualToRect(self.layer.mask.frame, self.bounds)) {
+            return;
+        }
+    }
+    
+    if (self.css_clipPath.length > 0) {
+        CSSClipPathLayer *clipLayer = [[CSSClipPathLayer alloc] initWithClipPath:self.css_clipPath hostView:self];
+        clipLayer.frame = self.bounds;
+        clipLayer.contentsScale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+        self.layer.mask = clipLayer;
+    } else {
+        self.layer.mask = nil;
+    }
+}
+#endif // [macOS]
 
 - (void)addRenderAction:(KRPathRenderAction)action {
     [self.renderActions addObject:action];
@@ -88,6 +134,7 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
         CGPathRelease(_path);
     }
     _path = CGPathCreateMutable();
+    [self.saveStack removeAllObjects];
     self.fillStyle = nil;
     self.strokeStyle = nil;
     self.lineWidth = 0;
@@ -198,6 +245,7 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     [shadow hrv_setPropWithKey:@"fontWeight" propValue:self.fontWeight];
     [shadow hrv_setPropWithKey:@"fontFamily" propValue:self.fontFamily];
     [shadow hrv_setPropWithKey:@"textAlign" propValue:self.textAlign];
+    [shadow hrv_setPropWithKey:@"contextParam" propValue:self.hr_rootView.contextParam];
     shadow.strokeAndFill = false;
     
     if(isStroke){
@@ -227,15 +275,17 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     x -= left;
     y += descent;
     
+    const int extraSpace = 1;
+    sz.width += extraSpace;
+    sz.height += extraSpace;
     NSAttributedString* attributedString = [shadow buildAttributedString];
     CGContextSaveGState(context);
-    CGContextTranslateCTM(context, x, y);
+    CGContextTranslateCTM(context, x, y + extraSpace);
     CGContextScaleCTM(context, 1.0, -1.0);
     CTFramesetterRef frameSetter = CTFramesetterCreateWithAttributedString((__bridge CFAttributedStringRef)attributedString);
     CGMutablePathRef framePath = CGPathCreateMutable();
     CGPathAddRect(framePath, NULL, CGRectMake(0, 0, sz.width, sz.height));
     CTFrameRef frame = CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, attributedString.length), framePath, NULL);
-    CGContextSetTextPosition(UIGraphicsGetCurrentContext(), 0, 0);
     CTFrameDraw(frame, context);
     CFRelease(frame);
     CFRelease(framePath);
@@ -276,7 +326,7 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     NSNumber* dHeight = params[@"dHeight"];
     
     KuiklyRenderView *rootView =  self.hr_rootView;
-    KRMemoryCacheModule *module = [rootView moduleWithName:NSStringFromClass([KRMemoryCacheModule class])];
+    KRMemoryCacheModule *module = (KRMemoryCacheModule *)[rootView moduleWithName:NSStringFromClass([KRMemoryCacheModule class])];
     UIImage* image = [module imageWithKey:imageCacheKey];
     
     KR_WEAK_SELF
@@ -328,6 +378,34 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     }];
 }
 
+// 实现虚线效果
+- (void)css_lineDash:(NSDictionary *)args {
+    KR_WEAK_SELF
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    NSArray <NSNumber *> *intervals = params[@"intervals"];
+
+    // 检查 intervals 是否为 NSNull  nil 或空数组
+    if (![intervals isKindOfClass:[NSArray class]] || [(NSArray * ) intervals count] == 0) {
+        // 绘制默认的实线效果
+        [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+            KR_STRONG_SELF_RETURN_IF_NIL
+            CGContextSetLineDash(context, 0, NULL, 0);
+        }];
+
+        return;
+    }
+    // 基于参数绘制虚线
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        KR_STRONG_SELF_RETURN_IF_NIL
+        CGFloat *dashPattern = malloc(intervals.count * sizeof(CGFloat));
+        for (NSUInteger i = 0; i < intervals.count; i++) {
+            dashPattern[i] = [intervals[i] floatValue];
+        }
+        CGContextSetLineDash(context, 0, dashPattern, intervals.count);
+        free(dashPattern);
+    }];
+}
+
 - (void)css_lineCap:(NSDictionary *)args {
     NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
        NSString *style = params[@"style"];
@@ -373,8 +451,15 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
 }
 
 - (void)css_clip:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    BOOL intersect = [params[@"intersect"] boolValue];
     [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
-        CGContextClip(context);
+        CGContextAddPath(context, path);
+        if (intersect) {
+            CGContextClip(context);
+        } else {
+            CGContextEOClip(context);
+        }
     }];
 }
 
@@ -440,12 +525,92 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
     [self.layer setNeedsDisplay];
 }
 
+- (void)css_save:(NSDictionary *)args {
+    __weak typeof(self) weakSelf = self;
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        CGContextSaveGState(context);
+        [strongSelf.saveStack addObject:@"gstate"];
+    }];
+}
+
+- (void)css_restore:(NSDictionary *)args {
+    __weak typeof(self) weakSelf = self;
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        NSString *type = strongSelf.saveStack.lastObject;
+        if (type) {
+            [strongSelf.saveStack removeLastObject];
+            if ([type isEqualToString:@"layer"]) {
+                CGContextEndTransparencyLayer(context);
+                CGContextRestoreGState(context);
+            } else {
+                CGContextRestoreGState(context);
+            }
+        }
+    }];
+}
+
+- (void)css_saveLayer:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    CGFloat x = [params[@"x"] floatValue];
+    CGFloat y = [params[@"y"] floatValue];
+    CGFloat width = [params[@"width"] floatValue];
+    CGFloat height = [params[@"height"] floatValue];
+    __weak typeof(self) weakSelf = self;
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        CGContextSaveGState(context);
+        CGContextBeginTransparencyLayer(context, NULL);
+        CGContextClipToRect(context, CGRectMake(x, y, width, height));
+        [strongSelf.saveStack addObject:@"layer"];
+    }];
+}
+
+- (void)css_translate:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    CGFloat dx = [params[@"x"] floatValue];
+    CGFloat dy = [params[@"y"] floatValue];
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        CGContextTranslateCTM(context, dx, dy);
+    }];
+}
+
+- (void)css_scale:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    CGFloat sx = [params[@"x"] floatValue];
+    CGFloat sy = [params[@"y"] floatValue];
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        CGContextScaleCTM(context, sx, sy);
+    }];
+}
+
+- (void)css_rotate:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    CGFloat angle = [params[@"angle"] floatValue];
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        CGContextRotateCTM(context, angle);
+    }];
+}
+
+- (void)css_skew:(NSDictionary *)args {
+    NSDictionary *params = [args[KRC_PARAM_KEY] hr_stringToDictionary];
+    CGFloat sx = [params[@"x"] floatValue];
+    CGFloat sy = [params[@"y"] floatValue];
+    [self addRenderAction:^(CGContextRef context, CGMutablePathRef path) {
+        CGAffineTransform transform = CGAffineTransformMake(1, sy, sx, 1, 0, 0);
+        CGContextConcatCTM(context, transform);
+    }];
+}
 
 #pragma mark - override
 
-
 - (void)drawRect:(CGRect)rect {
     [super drawRect:rect];
+    
     CGContextRef context = UIGraphicsGetCurrentContext();
     if (!context) {
         return;
@@ -526,7 +691,8 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
             // 将上下文裁剪为路径
             CGContextClip(context);
             // 绘制渐变
-            CGContextDrawLinearGradient(context, gradient, CGPointMake(x0, y0), CGPointMake(x1, y1), 0);
+            // 最后一个参数是设置绘制选项：渐变色在 起点之前继续延伸 + 在终点之后继续延伸。如果设置为0，则是渐变色仅在起点和终点之间绘制
+            CGContextDrawLinearGradient(context, gradient, CGPointMake(x0, y0), CGPointMake(x1, y1), kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation);
             // 恢复先前的图形状态（包括裁剪状态）
             CGContextRestoreGState(context);
             
@@ -557,7 +723,8 @@ typedef void (^KRPathRenderAction)(CGContextRef context, CGMutablePathRef path);
             // 将上下文裁剪为路径
             CGContextClip(context);
             // 绘制渐变
-            CGContextDrawLinearGradient(context, gradient, CGPointMake(x0, y0), CGPointMake(x1, y1), 0);
+            // 最后一个参数是设置绘制选项：渐变色在 起点之前继续延伸 + 在终点之后继续延伸。如果设置为0，则是渐变色仅在起点和终点之间绘制
+            CGContextDrawLinearGradient(context, gradient, CGPointMake(x0, y0), CGPointMake(x1, y1), kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation);
             // 恢复先前的图形状态（包括裁剪状态）
             CGContextRestoreGState(context);
             CGContextSetFillColorWithColor(context, [UIColor clearColor].CGColor);

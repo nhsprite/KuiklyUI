@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,4 +27,8 @@ object ModuleConst {
     const val CALENDAR = "KRCalendarModule"
     const val REFLECTION = "KRReflectionModule"
     const val PERFORMANCE = "KRPerformanceModule"
+    const val FONT = "KRFontModule"
+    const val VSYNC = "KRVsyncModule"
+    const val BACK_PRESS = "KRBackPressModule"
+    const val FILE = "KRFileModule"
 }

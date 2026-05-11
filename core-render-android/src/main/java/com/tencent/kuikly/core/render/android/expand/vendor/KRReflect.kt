@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -48,8 +48,6 @@ class KRReflect private constructor(val clazz: Class<*>, private var instance: A
         }
         return ConstructorReflect(accessible(constructor), this)
     }
-
-
 
     // 成员变量操作区
     /**
@@ -135,8 +133,6 @@ class KRReflect private constructor(val clazz: Class<*>, private var instance: A
             null
         }
     }
-
-
 
     // 检查是否存在有效的可操作实例。若不存在则抛出异常。
     private fun checkInstance() {

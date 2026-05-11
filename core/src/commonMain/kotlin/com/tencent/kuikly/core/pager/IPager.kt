@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,6 +18,7 @@ package com.tencent.kuikly.core.pager
 import com.tencent.kuikly.core.base.AbstractBaseView
 import com.tencent.kuikly.core.base.AnimationManager
 import com.tencent.kuikly.core.coroutines.LifecycleScope
+import com.tencent.kuikly.core.layout.FlexNode
 import com.tencent.kuikly.core.manager.Task
 import com.tencent.kuikly.core.module.Module
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
@@ -28,6 +29,10 @@ interface IPager {
     val lifecycleScope : LifecycleScope
     var animationManager: AnimationManager?
     val isDebugUIInspector : Boolean
+    var didCreateBody: Boolean
+    val isAppeared: Boolean
+    var pageLayoutTracer: PageLayoutTracer
+
     fun onCreatePager(pagerId: String, pageData: JSONObject)
 
     fun onDestroyPager()
@@ -143,8 +148,22 @@ interface IPager {
      * 自定义返回页面对应的缩放系数
      */
     fun pagerDensity(): Float {
-        return pageData.density ?: 0f
+        return pageData.density
     }
 
     fun setPageTrace(pageTrace: PageCreateTrace) {}
+    fun getPageTrace() : PageCreateTrace? {
+        return null
+    }
+
+    fun isAccessibilityRunning(): Boolean { return false }
+
+    /**
+     * 是否开启页面的Debug日志
+     * @return 是否开启，默认为false
+     */
+    fun isDebugLogEnable(): Boolean {
+        return false
+    }
+
 }

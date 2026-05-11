@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import com.tencent.kuikly.core.base.ViewBuilder
 import com.tencent.kuikly.core.base.attr.AccessibilityRole
 import com.tencent.kuikly.core.base.attr.ImageUri
 import com.tencent.kuikly.core.log.KLog
+import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
 import com.tencent.kuikly.core.views.Image
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
@@ -39,7 +40,7 @@ internal class ImageDemoPage: BasePager() {
 
     override fun created() {
         val imageUrl = "https://vfiles.gtimg.cn/wuji_dashboard/xy/starter/c498f4b4.jpg"
-        Utils.bridgeModule(pagerId).getLocalImagePath(imageUrl) {data ->
+        Utils.bridgeModule(this).getLocalImagePath(imageUrl) {data ->
             localImagePath = data?.optString("localPath", "") ?: ""
         }
         KLog.i("34343", "safeAreaInsets:" +pageData.safeAreaInsets.toString())
@@ -65,7 +66,19 @@ internal class ImageDemoPage: BasePager() {
                             tintColor(Color.RED)
                             accessibilityRole(AccessibilityRole.BUTTON)
                             size(pagerData.pageViewWidth * 0.6f, 100f)
+                            src(ImageUri.pageAssets("withAlphaTest.png"))
+                        }
+                    }
+                    Image {
+                        attr {
+                            resizeContain()
+                            tintColor(Color.RED)
+                            accessibilityRole(AccessibilityRole.BUTTON)
+                            size(pagerData.pageViewWidth * 0.6f, 100f)
                             src(ImageUri.pageAssets("panda.png"))
+                            val params = JSONObject()
+                            params.put("key", "value")
+                            src(ImageUri.pageAssets("panda.png"), params)
                         }
                     }
                     Image {

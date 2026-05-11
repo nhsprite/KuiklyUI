@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewExportProtocol.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -58,7 +58,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @optional
 /// 动画播放停止时暂时最后一帧动画
-@property (nonatomic, assign) BOOL showLastImgaeWhenPause;
+@property (nonatomic, assign) BOOL showLastImageWhenPause;
 
 
 @end

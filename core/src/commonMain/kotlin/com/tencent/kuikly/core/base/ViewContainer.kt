@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,21 +21,25 @@ import com.tencent.kuikly.core.base.attr.IEventCaptureAttr
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.collection.toFastList
+import com.tencent.kuikly.core.layout.FlexAlign
+import com.tencent.kuikly.core.layout.FlexDirection
+import com.tencent.kuikly.core.layout.FlexJustifyContent
+import com.tencent.kuikly.core.layout.FlexWrap
 import com.tencent.kuikly.core.layout.Frame
+import com.tencent.kuikly.core.layout.LayoutImpl.isMeasureDefined
 import com.tencent.kuikly.core.layout.StyleSpace
 import com.tencent.kuikly.core.layout.undefined
 import com.tencent.kuikly.core.layout.valueEquals
-import com.tencent.kuikly.core.layout.FlexDirection
-import com.tencent.kuikly.core.layout.FlexWrap
-import com.tencent.kuikly.core.layout.FlexJustifyContent
-import com.tencent.kuikly.core.layout.FlexAlign
-import com.tencent.kuikly.core.layout.LayoutImpl.isMeasureDefined
 import com.tencent.kuikly.core.nvi.serialization.json.JSONArray
-import com.tencent.kuikly.core.pager.Pager
+import com.tencent.kuikly.core.views.GlassEffectStyle
 import com.tencent.kuikly.core.views.RichTextView
 import com.tencent.kuikly.core.views.ScrollerContentView
+import com.tencent.kuikly.core.views.TextAreaView
 import com.tencent.kuikly.core.views.TextView
 
+interface IChildInit<T> {
+    fun childInit(child: T)
+}
 
 abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView<A, E>() {
 
@@ -44,9 +48,8 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
     private var didCreateFlexNode = false
     private var createRenderViewing = false
 
-
     open fun <T : DeclarativeBaseView<*, *>> addChild(child: T, init: T.() -> Unit) {
-        addChild(child, init, children.size)
+        addChild(child, init, -1)
     }
 
     open fun realContainerView(): ViewContainer<*, *> {
@@ -64,13 +67,15 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
         internalRemoveChild(child)
     }
 
-    fun removeChild(index: Int) {
+    open fun removeChild(index: Int) {
         internalRemoveChild(children[index])
     }
 
     open fun templateChildren(): List<DeclarativeBaseView<*, *>> {
         return children.toFastList()
     }
+
+    internal fun childrenToDump() = children
 
     open fun removeChildren() {
         forEachChild { child ->
@@ -89,7 +94,7 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
         templateChildren().forEach(action)
     }
 
-    fun getChild(index: Int): DeclarativeBaseView<*, *> {
+    open fun getChild(index: Int): DeclarativeBaseView<*, *> {
         return children[index]
     }
 
@@ -114,8 +119,6 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
         }
         return null
     }
-
-
 
     private fun renderViews(subView: DeclarativeBaseView<*, *>): List<DeclarativeBaseView<*, *>> {
         val list = fastArrayListOf<DeclarativeBaseView<*, *>>()
@@ -208,7 +211,6 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
         }
     }
 
-
     override fun removeFlexNode() {
         super.removeFlexNode()
         didCreateFlexNode = false
@@ -232,10 +234,29 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
         removeChildren()
     }
 
+    fun move(from: Int, to: Int, count: Int) {
+        if (from == to) {
+            return // nothing to do
+        }
+
+        for (i in 0 until count) {
+            // if "from" is after "to," the from index moves because we're inserting before it
+            val fromIndex = if (from > to) from + i else from
+            val toIndex = if (from > to) to + i else to + count - 2
+            val child = children.removeAt(fromIndex)
+
+            children.add(toIndex, child)
+        }
+    }
+
     private fun internalAddChild(child: DeclarativeBaseView<*, *>, index: Int) {
         child.pagerId = pagerId
         child.willMoveToParentComponent()
-        children.add(index, child)
+        if (index < 0) { // append when index -1
+            children.add(child)
+        } else {
+            children.add(index, child)
+        }
         child.parentRef = nativeRef
         child.didMoveToParentView()
     }
@@ -300,6 +321,9 @@ abstract class ViewContainer<A : ContainerAttr, E : Event> : DeclarativeBaseView
                 if(child is RichTextView){
                     (child as RichTextView).markDirty()
                 }
+                if (child is TextAreaView) {
+                    (child as TextAreaView).markDirty()
+                }
             } else if (child is ViewContainer) {
                 (child as ViewContainer).markChildTextViewsDirty()
             }
@@ -325,6 +349,29 @@ open class ContainerAttr : Attr(), IContainerLayoutAttr, IEventCaptureAttr {
 
     open fun flexDirectionRow(): ContainerAttr {
         flexDirection(FlexDirection.ROW)
+        return this
+    }
+
+    open fun glassEffectIOS(enable: Boolean = true,
+                            interactive: Boolean? = true,
+                            tintColor: Color? = null,
+                            style: GlassEffectStyle? = null
+    ): ContainerAttr {
+        StyleConst.GLASS_EFFECT_ENABLE with enable
+        if (interactive != null) {
+            StyleConst.GLASS_EFFECT_INTERACTIVE with interactive
+        }
+        if (tintColor != null) {
+            StyleConst.GLASS_EFFECT_TINT_COLOR with tintColor.toString()
+        }
+        if (style != null) {
+            StyleConst.GLASS_EFFECT_STYLE with style.value
+        }
+        return this
+    }
+
+    open fun glassEffectContainerIOS(spacing: Float): ContainerAttr {
+        StyleConst.GLASS_EFFECT_SPACING with spacing
         return this
     }
 
@@ -458,5 +505,4 @@ open class ContainerAttr : Attr(), IContainerLayoutAttr, IEventCaptureAttr {
             }
         }.toString()
     }
-
 }

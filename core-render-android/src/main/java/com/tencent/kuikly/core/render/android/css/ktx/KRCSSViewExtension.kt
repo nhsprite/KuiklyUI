@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,7 +29,9 @@ import android.util.Size
 import android.view.View
 import android.view.View.AccessibilityDelegate
 import android.view.ViewGroup
+import android.view.ViewParent
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.CheckBox
@@ -38,6 +40,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import com.tencent.kuikly.core.render.android.IKuiklyRenderContext
+import com.tencent.kuikly.core.render.android.KuiklyRenderView
 import com.tencent.kuikly.core.render.android.adapter.KuiklyRenderLog
 import com.tencent.kuikly.core.render.android.const.KRCssConst
 import com.tencent.kuikly.core.render.android.css.animation.KRCSSAnimation
@@ -50,20 +53,16 @@ import org.json.JSONObject
 
 /**
  * 设置通用的css样式，支持的属性列表可以查看[KRCssConst]定义的属性
- *
- * <p>这里为啥不用使用map<key, handler>来处理?
- *
- * <p>1.通用属性不会太多, 使用when语句的可读性比map<key，handler>的方式好
- *
- * <p>2.setCommonProp方法比较稳定，一般只有维护者一人编写
- *
- * <p>3.降低内存开销
- *
- * <p>这里的value类型是与kuiklyCore侧约定好的，因此没判断就使用强转
- *
+ * 这里为啥不用使用map<key, handler>来处理?
+ * 1.通用属性不会太多, 使用when语句的可读性比map<key，handler>的方式好
+ * 2.setCommonProp方法比较稳定，一般只有维护者一人编写
+ * 3.降低内存开销
+ * 这里的value类型是与kuiklyCore侧约定好的，因此没判断就使用强转
  * @param key css样式key
  * @param value css样式值
  * @return 是否处理
+ *
+ * 注意: 如果有新增基础属性的话，需要在[createBaseAtrKeySet]中也加上
  */
 @Suppress("UNCHECKED_CAST")
 fun View.setCommonProp(key: String, value: Any): Boolean {
@@ -74,14 +73,25 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
     return when (key) {
         KRCssConst.OPACITY -> {
             opacity = (value as Number).toFloat()
+            tryPropagatePendingOverBounds()
+            true
+        }
+        KRCssConst.PREVENT_TOUCH -> {
+            setPreventTouch(value as Boolean)
+            true
+        }
+        KRCssConst.CONSUME_TOUCH_DOWN -> {
+            setTouchDownConsumeOnce(value as Boolean)
             true
         }
         KRCssConst.VISIBILITY -> {
             visibility = if ((value as Int) == 0) View.GONE else View.VISIBLE
+            tryPropagatePendingOverBounds()
             true
         }
         KRCssConst.OVERFLOW -> {
             overflow = (value as Int) == 1
+            tryPropagatePendingOverBounds()
             true
         }
         KRCssConst.BACKGROUND_COLOR -> {
@@ -106,6 +116,7 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
         }
         KRCssConst.BORDER_RADIUS -> {
             borderRadius = value as String
+            tryPropagatePendingOverBounds()
             true
         }
         KRCssConst.BORDER -> {
@@ -138,6 +149,9 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
             frame = value as Rect
             hadSetFrame = true
             dispatchOnSetFrame(value)
+            if (KuiklyRenderView.lazyClipChildren) {
+                updateClipChildrenWithFrameBounds(value)
+            }
             true
         }
         KRCssConst.Z_INDEX -> {
@@ -154,14 +168,15 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
         }
         KRCssConst.ACCESSIBILITY -> {
             val msg = value as String
+            putViewData(KRCssConst.ACCESSIBILITY, msg)
             contentDescription = msg
-            importantForAccessibility = if (msg.isEmpty()) {
-                View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-            } else {
-                View.IMPORTANT_FOR_ACCESSIBILITY_YES
-            }
+            setAccessibilityImportance(msg, getViewData(KRCssConst.ACCESSIBILITY_ROLE) ?: "")
             initAccessibilityDelegate()
             setFocusable(true)
+            true
+        }
+        KRCssConst.ACCESSIBILITY_INFO -> {
+            setAccessibilityInfo(value)
             true
         }
         KRCssConst.DEBUG_NAME -> {
@@ -180,7 +195,13 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
             true
         }
         KRCssConst.USE_OUTLINE -> {
-            viewDecorator?.useOutline = value as Boolean
+            obtainViewDecorator().useOutline = value as Boolean
+            true
+        }
+
+        KRCssConst.CLIP_PATH -> {
+            obtainViewDecorator().clipPathData = value as String
+            tryPropagatePendingOverBounds()
             true
         }
         else -> false
@@ -188,13 +209,15 @@ fun View.setCommonProp(key: String, value: Any): Boolean {
 }
 
 fun View.drawCommonDecoration(canvas: Canvas) {
-    getViewData<KRViewDecoration>(KRCssConst.VIEW_DECORATOR)?.drawCommonDecoration(frameWidth, frameHeight, canvas)
+    optViewDecorator()?.drawCommonDecoration(frameWidth, frameHeight, canvas)
 }
 
 fun View.drawCommonForegroundDecoration(canvas: Canvas) {
-    if (isBeforeM) {
-        getViewData<KRViewDecoration>(KRCssConst.VIEW_DECORATOR)?.drawCommonForegroundDecoration(frameWidth, frameHeight, canvas)
-    }
+    optViewDecorator()?.drawCommonForegroundDecoration(frameWidth, frameHeight, canvas)
+}
+
+fun View.hasCustomClipPath(): Boolean {
+    return optViewDecorator()?.hasCustomClipPath() == true
 }
 
 /**
@@ -287,9 +310,10 @@ fun View.resetCommonProp(propKey: String): Boolean {
         }
         KRCssConst.ACCESSIBILITY -> {
             removeViewData<String>(KRCssConst.HAD_INIT_ACCESSIBILITY_DELEGATE)
+            removeViewData<String>(KRCssConst.ACCESSIBILITY)
             accessibilityDelegate = null
             contentDescription = null
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            resetAccessibilityImportance()
             return true
         }
         KRCssConst.DEBUG_NAME -> {
@@ -297,13 +321,18 @@ fun View.resetCommonProp(propKey: String): Boolean {
             return true
         }
         KRCssConst.USE_OUTLINE -> {
-            viewDecorator = null
+            destroyViewDecorator()
             return true
         }
         KRCssConst.ACCESSIBILITY_ROLE -> {
             removeViewData<Boolean>(KRCssConst.HAD_INIT_ACCESSIBILITY_DELEGATE)
             removeViewData<String>(KRCssConst.ACCESSIBILITY_ROLE)
             accessibilityDelegate = null
+            resetAccessibilityImportance()
+        }
+        KRCssConst.CLIP_PATH -> {
+            destroyViewDecorator()
+            return true
         }
     }
     return false
@@ -319,6 +348,27 @@ private var View.opacity: Float
     set(value) {
         alpha = value
     }
+
+internal var touchConsumeByKuikly = false
+internal val touchConsumeByNative
+    get() = nativeGestureViewHashCodeSet.isNotEmpty()
+internal var touchDownConsumeOnce = false
+
+/**
+ * 用于记录当前正在消费Native手势的View的集合，如果不为空则表现当前已经被Native消费了手势
+ */
+internal var nativeGestureViewHashCodeSet = mutableSetOf<Int>()
+
+/**
+ * 阻止父亲View处理Touch事件
+ */
+fun View.setPreventTouch(value: Boolean) {
+    touchConsumeByKuikly = value
+}
+
+fun View.setTouchDownConsumeOnce(value: Boolean) {
+    touchDownConsumeOnce = value
+}
 
 /**
  * 为View扩展overflow属性
@@ -406,7 +456,6 @@ fun View.removeOnSetFrameObserver(propKey: String) {
     }
 }
 
-
 var View.hadSetFrame: Boolean
     get() = getViewData<Boolean>(KRCssConst.HAD_SET_FRAME) ?: false
     set(value) {
@@ -422,39 +471,43 @@ typealias OnSetFrameBlock = (frame: Rect) -> Unit
 /**
  * 为View扩展背景颜色
  */
-internal var View.hrBackgroundColor: Int?
+internal var View.hrBackgroundColor: Int
     get() {
-        return viewDecorator?.backgroundColor
+        return optViewDecorator()?.backgroundColor ?: 0
     }
     set(value) {
-        viewDecorator?.backgroundColor = value ?: 0
+        obtainViewDecorator().backgroundColor = value
     }
 
 /**
  * 为View扩展渐变属性
  */
 private var View.backgroundLinearGradient: String?
-    get() = viewDecorator?.backgroundImage
+    get() = optViewDecorator()?.backgroundImage
     set(value) {
-        viewDecorator?.backgroundImage = value ?: KRCssConst.EMPTY_STRING
+        obtainViewDecorator().backgroundImage = value ?: KRCssConst.EMPTY_STRING
     }
 
 /**
  * 为View扩展阴影属性
  */
 private var View.boxShadow: String?
-    get() = viewDecorator?.boxShadow
+    get() = optViewDecorator()?.boxShadow
     set(value) {
-        viewDecorator?.boxShadow = value ?: KRCssConst.EMPTY_STRING
+        val viewDecorator = obtainViewDecorator()
+        viewDecorator.boxShadow = value ?: KRCssConst.EMPTY_STRING
+        if (KuiklyRenderView.lazyClipChildren && viewDecorator.hasBoxShadow) {
+            parent?.setContentOverBounds()
+        }
     }
 
 /**
  * 为View扩展borderRadius属性
  */
 private var View.borderRadius: String?
-    get() = viewDecorator?.borderRadius
+    get() = optViewDecorator()?.borderRadius
     set(value) {
-        viewDecorator?.borderRadius = value ?: KRCssConst.EMPTY_STRING
+        obtainViewDecorator().borderRadius = value ?: KRCssConst.EMPTY_STRING
         invalidate()
     }
 
@@ -462,9 +515,9 @@ private var View.borderRadius: String?
  * 为View扩展borderStyle属性
  */
 private var View.borderStyle: String?
-    get() = viewDecorator?.borderStyle
+    get() = optViewDecorator()?.borderStyle
     set(value) {
-        viewDecorator?.borderStyle = value ?: KRCssConst.EMPTY_STRING
+        obtainViewDecorator().borderStyle = value ?: KRCssConst.EMPTY_STRING
     }
 
 /**
@@ -472,33 +525,42 @@ private var View.borderStyle: String?
  */
 private fun View.resetHRBackground() {
     background = null
-    viewDecorator = null
+    destroyViewDecorator()
 }
 
 private fun View.resetBorder() {
-    viewDecorator = null
+    destroyViewDecorator()
     if (!isBeforeM) {
         foreground = null
     }
 }
 
-internal var View.viewDecorator: KRViewDecoration?
-    get() {
-        return getViewData(KRCssConst.VIEW_DECORATOR) ?: KRViewDecoration(this).apply {
-            putViewData(KRCssConst.VIEW_DECORATOR, this)
-        }
+/**
+ * 获取或创建View的装饰器（始终返回非空实例）
+ */
+internal fun View.obtainViewDecorator(): KRViewDecoration {
+    return getViewData(KRCssConst.VIEW_DECORATOR) ?: KRViewDecoration(this).also {
+        putViewData(KRCssConst.VIEW_DECORATOR, it)
     }
-    set(value) {
-        if (value == null) {
-            removeViewData<KRViewDecoration>(KRCssConst.VIEW_DECORATOR)
-            if (outlineProvider != null) {
-                outlineProvider = null
-                clipToOutline = false
-            }
-        } else {
-            putViewData(KRCssConst.VIEW_DECORATOR, value)
-        }
+}
+
+/**
+ * 获取View的装饰器（可能为空，不会自动创建）
+ */
+internal fun View.optViewDecorator(): KRViewDecoration? {
+    return getViewData(KRCssConst.VIEW_DECORATOR)
+}
+
+/**
+ * 销毁View的装饰器
+ */
+internal fun View.destroyViewDecorator() {
+    removeViewData<KRViewDecoration>(KRCssConst.VIEW_DECORATOR) ?: return
+    if (outlineProvider != null) {
+        outlineProvider = null
+        clipToOutline = false
     }
+}
 
 /**
  * 添加事件监听
@@ -508,7 +570,7 @@ internal var View.viewDecorator: KRViewDecoration?
 @SuppressLint("ClickableViewAccessibility")
 fun View.addEventListener(type: Int, callback: KuiklyRenderCallback) {
     val gestureDetector = getViewData(KRCSSGestureDetector.GESTURE_TAG) ?: KRCSSGestureDetector(
-        context, this@addEventListener, KRCSSGestureListener()).also {
+        context, this@addEventListener, KRCSSGestureListener(context as? IKuiklyRenderContext)).also {
         putViewData(KRCSSGestureDetector.GESTURE_TAG, it)
         setOnTouchListener { _, event -> it.onTouchEvent(event) }
     }
@@ -577,10 +639,10 @@ private fun View.setHRAnimation(animation: String?) {
             }
         }
         else -> {
-            val newAnimation = KRCSSAnimation(animation, this)
-            newAnimation.onAnimationEndBlock = { hrAnimation: KRCSSAnimation, isCancel, propKey, animationKey ->
+            val newAnimation = KRCSSAnimation(animation, this, context as? IKuiklyRenderContext)
+            newAnimation.onAnimationEndBlock = { hrAnimation: KRCSSAnimation, finished, propKey, animationKey ->
                 animationCompletionBlock?.invoke(mapOf(
-                    "finish" to if (isCancel) 0 else 1,
+                    "finish" to if (finished) 1 else 0,
                     "attr" to propKey,
                     "animationKey" to animationKey
                 ))
@@ -733,6 +795,7 @@ fun View.clearViewData() {
  */
 fun String?.toJSONObjectSafely(): JSONObject = JSONObject(this ?: "{}")
 
+private const val ROLE_NONE = "none"
 private fun View.setAccessibilityRole(propValue: Any) {
     val value = when (propValue as String) {
         "button" -> Button::class.java.name
@@ -740,30 +803,74 @@ private fun View.setAccessibilityRole(propValue: Any) {
         "text" -> TextView::class.java.name
         "image" -> ImageView::class.java.name
         "checkbox" -> CheckBox::class.java.name
+        "none" -> ROLE_NONE
         else -> ""
     }
     putViewData(KRCssConst.ACCESSIBILITY_ROLE, value)
+    setAccessibilityImportance(getViewData(KRCssConst.ACCESSIBILITY) ?: "", value)
     initAccessibilityDelegate()
+}
+
+private fun View.setAccessibilityInfo(propValue: Any) {
+    putViewData(KRCssConst.ACCESSIBILITY_INFO, propValue)
+    initAccessibilityDelegate()
+}
+
+private fun View.setAccessibilityImportance(description: String, role: String) {
+    importantForAccessibility = if (role == ROLE_NONE) {
+        View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    } else if (description.isEmpty()) {
+        View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    } else {
+        View.IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+}
+
+private fun View.resetAccessibilityImportance() {
+    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+}
+
+internal fun View.hasInitAccessibilityDelegate(): Boolean {
+    return getViewData<Boolean>(KRCssConst.HAD_INIT_ACCESSIBILITY_DELEGATE) == true
 }
 
 private fun View.initAccessibilityDelegate() {
     if (getViewData<Boolean>(KRCssConst.HAD_INIT_ACCESSIBILITY_DELEGATE) == true) {
         return
     }
-    accessibilityDelegate =  object : AccessibilityDelegate() {
+    accessibilityDelegate = object : AccessibilityDelegate() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(host, info)
             val name = getViewData<String>(KRCssConst.ACCESSIBILITY_ROLE)
             if (name != null) {
                 info.className = name
             }
+
+            getViewData<String>(KRCssConst.ACCESSIBILITY_INFO)?.apply {
+                val flags = (this as String).split(" ")
+                info.isClickable = flags[0] == "1"
+                info.isLongClickable = flags[1] == "1"
+            }
+
             if (hasEventListener(KRCSSGestureListener.TYPE_CLICK)) {
+                info.isClickable = true
                 info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
             }
+
             if (hasEventListener(KRCSSGestureListener.TYPE_LONG_PRESS)) {
+                info.isLongClickable = true
                 info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK)
             }
         }
+
+        override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
+            // 避免因为内容变化对Compose得stateDescription造成重复播报
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+                return
+            }
+            super.sendAccessibilityEventUnchecked(host, event)
+        }
+
     }
     putViewData(KRCssConst.HAD_INIT_ACCESSIBILITY_DELEGATE, true)
 }
@@ -818,7 +925,7 @@ val Context.screenHeight: Int
         return innerScreenHeight
     }
 
-private fun getDisplaySize(context: Context): Size {
+internal fun getDisplaySize(context: Context): Size {
     val manager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     val metrics = DisplayMetrics()
     manager.defaultDisplay.getRealMetrics(metrics)
@@ -841,6 +948,12 @@ val Context.versionName: String
 val isBeforeM: Boolean
     get() = Build.VERSION.SDK_INT <= Build.VERSION_CODES.M
 
+val isBeforeOreoMr1: Boolean
+    get() = Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1
+
+val isAfterAndroid11: Boolean
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
 internal fun View.setFrameForAndroidM(frame: Rect) {
     var lp = layoutParams
     if (lp is ViewGroup.MarginLayoutParams) {
@@ -856,3 +969,90 @@ internal fun View.setFrameForAndroidM(frame: Rect) {
     lp.height = frame.bottom
     layoutParams = lp
 }
+
+// ====================== 以下 Clip Children 相关 ===================
+// should clip content
+internal val ViewGroup.shouldClipContent: Boolean get() = opacity == 0f ||
+        visibility == View.GONE ||
+        overflow ||
+        optViewDecorator()?.needClip == true
+
+// handle shouldClipContent change from true to false
+private fun View.tryPropagatePendingOverBounds() {
+    if (KuiklyRenderView.lazyClipChildren) {
+        val viewGroup = this as? ViewGroup ?: return
+        val parent = parent as? ViewGroup ?: return
+        if (parent.clipChildren && viewGroup.contentOverBounds() && !viewGroup.shouldClipContent) {
+            parent.clipChildren = false
+            parent.setContentOverBounds()
+        }
+    }
+}
+
+// transform over bounds
+internal fun View.setTransformOverBounds() {
+    parent?.setContentOverBounds() ?: putViewData(KRCssConst.TRANSFORM_OVER_BOUNDS, true)
+}
+internal fun View.transformOverBounds(): Boolean {
+    return getViewData<Boolean>(KRCssConst.TRANSFORM_OVER_BOUNDS) == true
+}
+
+// frame over bounds
+/**
+ * 判断frame是否超出bounds，Rect内部字段的含义：left/top表示相对位置，right/bottom表示宽高
+ */
+private fun Rect.overBounds(bounds: Rect): Boolean {
+    return left < 0 || top < 0 || left + right > bounds.right || top + bottom > bounds.bottom
+}
+internal fun View.frameOverBounds(): Boolean {
+    val currentFrame = if (hadSetFrame) this.frame else return false
+    val parent = parent as? ViewGroup ?: return false
+    val parentFrame = if (parent.hadSetFrame) parent.frame else return false
+    return currentFrame.overBounds(parentFrame)
+}
+
+// content over bounds
+internal fun ViewParent.setContentOverBounds() {
+    var view = this as? ViewGroup ?: return
+    while (view !is KuiklyRenderView) {
+        val parent = view.parent
+        if (parent is ViewGroup && !parent.clipChildren) {
+            // already not clip
+            break
+        }
+        if (parent !is ViewGroup || view.shouldClipContent) {
+            view.putViewData(KRCssConst.CONTENT_OVER_BOUNDS, true)
+            break
+        }
+        parent.clipChildren = false
+        view = parent
+    }
+}
+internal fun ViewGroup.contentOverBounds(): Boolean {
+    return getViewData<Boolean>(KRCssConst.CONTENT_OVER_BOUNDS) == true
+}
+
+internal fun View.updateClipChildrenWithFrameBounds(frame: Rect) {
+    if (this is ViewGroup) {
+        // check children first
+        val parentClipChildren = (parent as? ViewGroup)?.clipChildren ?: true
+        if (parentClipChildren && !this.contentOverBounds()) {
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                if (child.hadSetFrame && child.frame.overBounds(frame)) {
+                    this.setContentOverBounds()
+                    return
+                }
+            }
+        }
+    }
+    val parent = parent as? ViewGroup ?: return
+    if ((parent.parent as? ViewGroup)?.clipChildren == false || parent.contentOverBounds()) {
+        return
+    }
+    val parentFrame = if (parent.hadSetFrame) parent.frame else return
+    if (frame.overBounds(parentFrame)) {
+        parent.setContentOverBounds()
+    }
+}
+// ====================== 以上 Clip Children 相关 ===================

@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,6 +22,7 @@
 #import "KuiklyContextParam.h"
 #import "NSObject+KR.h"
 #import "KRBlurView.h"
+#import "KuiklyRenderThreadManager.h"
 
 NSString *const KRImageAssetsPrefix = @"assets://";
 NSString *const KRImageLocalPathPrefix = @"file://";
@@ -43,7 +44,7 @@ NSString *const KRImageBase64Prefix = @"data:image";
 
 
 @end
-typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
+typedef void (^KRSetImageBlock) (UIImage *_Nullable image);
 
 /*
  * @brief 暴露给Kotlin侧调用的Image组件
@@ -63,16 +64,29 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 @property (nonatomic, copy) NSString *KUIKLY_PROP(maskLinearGradient);
 /** 图片拉伸区域 */
 @property (nonatomic, copy) NSString *KUIKLY_PROP(capInsets);
+/** 图片颜色滤镜 */
+@property (nonatomic, copy) NSString *KUIKLY_PROP(colorFilter);
+/** 图片加载参数 */
+@property (nonatomic, copy) NSString *KUIKLY_PROP(imageParams);
+
 
 /** 图片加载成功回调事件 */
 @property (nonatomic, strong, nullable) KuiklyRenderCallback KUIKLY_PROP(loadSuccess);
 /** 图片分辨率加载成功回调事件 */
 @property (nonatomic, strong, nullable) KuiklyRenderCallback KUIKLY_PROP(loadResolution);
+/** 图片加载失败回调事件 */
+@property (nonatomic, strong, nullable) KuiklyRenderCallback KUIKLY_PROP(loadFailure);
+/** 记录图片加载失败，但 loadFailure 属性还未设置的情况 */
+@property (nonatomic, assign) BOOL pendingLoadFailure;
+/** loadFailure 回调还未设置时，图片加载失败的错误码 */
+@property (nonatomic, assign) NSInteger errorCode;
+/** 正在进行中的图片加载请求计数 */
+@property (nonatomic, assign) NSUInteger imageLoadingCount;
 
 @end
 
 @implementation KRImageView {
-    __weak UIImage *_originImage;
+    UIImage *_originImage;
 }
 
 @synthesize hr_rootView;
@@ -81,6 +95,10 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
     if (self = [super initWithFrame:frame]) {
         self.contentMode = UIViewContentModeScaleAspectFill;
         self.clipsToBounds = YES;
+        self.kr_reuseDisable = YES;
+#if !TARGET_OS_OSX // [macOS]
+        self.semanticContentAttribute = UISemanticContentAttributeForceLeftToRight;
+#endif // [macOS]
     }
     return self;
 }
@@ -93,18 +111,25 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 }
 
 - (void)hrv_prepareForeReuse {
-    if (self.image && self.css_src) {
-        [[KRImageRefreshCache sharedInstance] cacheWithKey:self.css_src image:self.image];
+    if (self.image && self.css_src && _originImage) {
+        [[KRImageRefreshCache sharedInstance] cacheWithKey:self.css_src image:_originImage];
     }
     KUIKLY_RESET_CSS_COMMON_PROP;
+    _originImage = nil;
     self.css_src = nil;
     self.css_tintColor = nil;
+    self.css_colorFilter = nil;
     self.css_resize = nil;
     self.css_dotNineImage = nil;
     self.clipsToBounds = YES;
     self.css_loadSuccess = nil;
     self.css_loadResolution = nil;
+    self.css_loadFailure = nil;
     self.css_capInsets = nil;
+    self.pendingLoadFailure = false;
+    self.errorCode = 0;
+    self.imageLoadingCount = 0;
+    self.css_imageParams = nil;
 }
 
 #pragma mark - setter
@@ -113,14 +138,24 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
     NSRange subRange = NSMakeRange(KRImageAssetsPrefix.length, css_src.length - KRImageAssetsPrefix.length - fileExtension.length - 1);
     NSString *pathWithoutExtension = [css_src substringWithRange:subRange];
     KuiklyContextParam *contextParam = ((KuiklyRenderView *)self.hr_rootView).contextParam;
-    NSURL *url = [contextParam.contextMode urlForFileName:pathWithoutExtension extension:fileExtension];
-    NSString *urlString = url ? url.absoluteString : @"";
-    [self setImageWithUrl:urlString];
+    NSURL *url = [contextParam urlForFileName:pathWithoutExtension extension:fileExtension];
+    if (url) {
+        NSString *urlString = url ? url.absoluteString : @"";
+        [self setImageWithLocalUrl:urlString];
+    } else {
+        // 没有在默认位置找到assets资源，将src传递给适配器由业务处理
+        [self setImageWithUrl:css_src];
+    }
 }
 
-- (void)setImageWithLocalPath:(NSString *)localPath {
+// 本地文件格式的("file://")图片，Kuikly支持默认加载
+- (void)setImageWithLocalUrl:(NSString *)localUrl {
+    bool handled = [self setImageWithUrl:localUrl];
+    if (handled) {
+        return;
+    }
     // Remove "file://" prefix to get the actual file path
-    NSString *actualPath = [localPath substringFromIndex:[KRImageLocalPathPrefix length]];
+    NSString *actualPath = [localUrl substringFromIndex:[KRImageLocalPathPrefix length]];
     UIImage *image = [UIImage imageWithContentsOfFile:actualPath];
     self.image = image;
 }
@@ -128,56 +163,133 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 - (void)setCss_src:(NSString *)css_src {
     if (self.css_src != css_src) {
         _css_src = css_src;
-        [self bindImageToView:nil]; // clear current image
-        UIImage *image = [[KRImageRefreshCache sharedInstance] imageWithKey:css_src];
-        if (image) {
-            self.image = image;
-            return ;
+        [self bindImageToView:nil]; // clear current image 清除缓存
+        if (css_src) {
+            UIImage *image = [[KRImageRefreshCache sharedInstance] imageWithKey:css_src];
+            if (image) {
+                self.image = image;
+                return;
+            }
+            // 缓存中不存在当前src对应的图片，则再执行加载
+            [self setImageWithSrc:css_src];
         }
+    }
+}
+
+/*
+ * 根据src加载原始图片 + 原始图片染色
+ * @param css_src：图片路径
+ */
+- (void)setImageWithSrc:(NSString *)css_src {
+    if (css_src) {
+        [self bindImageToView:nil]; // clear current image
         if ([css_src hasPrefix:KRImageAssetsPrefix]) {
             [self setAssetsImage:css_src];
         } else if ([css_src hasPrefix:KRImageBase64Prefix]) {
             [self setImageWithUrl:nil]; // cancel before url download
             [self p_setBase64Image:css_src];
         } else if([css_src hasPrefix:KRImageLocalPathPrefix]) {
-            [self setImageWithLocalPath:css_src];
-        } else {    // @"http://", @"https://", @"file://"
+            [self setImageWithLocalUrl:css_src];
+        } else {    // @"http://", @"https://"
             [self setImageWithUrl:css_src];
         }
+    }
+}
+
+
+/*
+ * 新增图片加载参数Image_parmas的set方法
+ * @css_imageParmas 图片加载参数
+ */
+- (void)setCss_imageParams:(NSString *)css_imageParmas {
+    if (self.css_imageParams != css_imageParmas) {
+        _css_imageParams = css_imageParmas;
     }
 }
 
 - (void)setCss_blurRadius:(NSNumber *)css_blurRadius {
     if (_css_blurRadius != css_blurRadius) {
         _css_blurRadius = css_blurRadius;
-        [self p_updateWithImage:_originImage];
+        if (_originImage == nil) {
+            [self setImageWithSrc:self.css_src];
+        } else {
+            [self p_updateWithImage:_originImage];
+        }
     }
 }
 
 - (void)setCss_tintColor:(NSString *)css_tintColor {
     _css_tintColor = css_tintColor;
     self.tintColor = [UIView css_color:css_tintColor];
-    [self p_updateWithImage:_originImage];
+    if (_originImage == nil) {
+        [self setImageWithSrc:self.css_src];
+    } else {
+        [self p_updateWithImage:_originImage];
+    }
+}
+
+- (void)setCss_colorFilter:(NSString *)css_colorFilter {
+    if (_css_colorFilter != css_colorFilter) {
+        _css_colorFilter = css_colorFilter;
+        if (_originImage == nil) {
+            [self setImageWithSrc:self.css_src];
+        } else {
+            [self p_updateWithImage:_originImage];
+        }
+    }
 }
 
 - (void)setCss_maskLinearGradient:(NSString *)css_maskLinearGradient {
     if (_css_maskLinearGradient != css_maskLinearGradient) {
         _css_maskLinearGradient = css_maskLinearGradient;
-        if (_css_maskLinearGradient) {
-            self.layer.mask = nil;
-        }
         [self p_syncMaskLinearGradientIfNeed];
     }
-   
-   
+
 }
 
-- (void)setImageWithUrl:(NSString *)url {
-    if ([[KuiklyRenderBridge componentExpandHandler] respondsToSelector:@selector(hr_setImageWithUrl:forImageView:)]) {
-        [[KuiklyRenderBridge componentExpandHandler] hr_setImageWithUrl:url forImageView:self];
+- (BOOL)setImageWithUrl:(NSString *)url {
+    BOOL handled = false;
+    
+    if ([[KuiklyRenderBridge componentExpandHandler] respondsToSelector:@selector(hr_setImageWithUrl:imageParams:complete:)]) {
+        self.kr_reuseDisable = YES;     // 先关闭ImageView的复用能力
+        self.imageLoadingCount++;
+        __weak typeof(self) wself = self;
+        handled = [[KuiklyRenderBridge componentExpandHandler] hr_setImageWithUrl:url
+                                                                     imageParams:[self.css_imageParams hr_stringToDictionary]
+                                                                         complete:^(UIImage * _Nullable image, NSError * _Nullable error, NSURL * _Nullable imageURL) {
+            [KuiklyRenderThreadManager performOnMainQueueWithTask:^{
+                __strong typeof(wself) sself = wself;
+                if (!sself) {
+                    return;
+                }
+                // 回调处理
+                if ([sself p_handleImageLoadCompletion:error url:sself.css_src imageURL:imageURL] && image) {
+                    sself.image = image;
+                }
+                [sself p_decrementImageLoadingCount];       // 图片加载完成，不管是否成功，更新图片加载计数，判断是否开放复用能力
+            } sync:NO];
+        }];
+    }
+    else if ([[KuiklyRenderBridge componentExpandHandler] respondsToSelector:@selector(hr_setImageWithUrl:forImageView:complete:)]) {
+        __weak typeof(self) wself = self;
+        handled = [[KuiklyRenderBridge componentExpandHandler] hr_setImageWithUrl:url
+                                                                     forImageView:self
+                                                                         complete:^(UIImage * _Nullable image, NSError * _Nullable error, NSURL * _Nullable imageURL) {
+            [KuiklyRenderThreadManager performOnMainQueueWithTask:^{
+                __strong typeof(wself) sself = wself;
+                if (!sself) {
+                    return;
+                }
+                // 回调处理
+                [sself p_handleImageLoadCompletion:error url:sself.css_src imageURL:imageURL];
+            } sync:NO];
+        }];
+    } else if ([[KuiklyRenderBridge componentExpandHandler] respondsToSelector:@selector(hr_setImageWithUrl:forImageView:)]) {
+        handled = [[KuiklyRenderBridge componentExpandHandler] hr_setImageWithUrl:url forImageView:self];
     } else {
         NSAssert(0, @"should expand hr_setImageWithUrl:forImageView:");
     }
+    return handled;
 }
 
 
@@ -192,7 +304,11 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 - (void)setCss_capInsets:(NSString*)insets{
     if (_css_capInsets != insets) {
         _css_capInsets = insets;
-        [self p_updateWithImage:_originImage];
+        if (_originImage == nil) {
+            [self setImageWithSrc:self.css_src];
+        } else {
+            [self p_updateWithImage:_originImage];
+        }
     }
 }
 
@@ -211,6 +327,16 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
         if (css_loadResolution && self.image) {
             [self p_fireLoadResolutionEventWithImage:self.image];
         }
+    }
+}
+
+- (void)setCss_loadFailure:(KuiklyRenderCallback)css_loadFailure {
+    if (_css_loadFailure != css_loadFailure) {
+        _css_loadFailure = css_loadFailure;
+    }
+    if (self.pendingLoadFailure) {
+        [self p_fireLoadFailureEventWithErrorCode:self.errorCode];
+        self.pendingLoadFailure = false;
     }
 }
 
@@ -247,7 +373,7 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 - (void)p_setBase64Image:(NSString *)base64Str {
     __weak typeof(&*self) weakSelf = self;
     KuiklyRenderView *rootView =  self.hr_rootView;
-    KRMemoryCacheModule *module = [rootView moduleWithName:NSStringFromClass([KRMemoryCacheModule class])];
+    KRMemoryCacheModule *module = (KRMemoryCacheModule *)[rootView moduleWithName:NSStringFromClass([KRMemoryCacheModule class])];
     if (!module) {
         return;
     }
@@ -280,22 +406,229 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 
 // 同步渐变遮罩
 - (void)p_syncMaskLinearGradientIfNeed {
+    
+#if TARGET_OS_OSX
+    // macOS：使用位图合成方案，避免嵌套 mask 问题
+    [self p_syncMaskLinearGradientIfNeed_macOS];
+    return;
+#endif
+
     if (CGSizeEqualToSize(self.frame.size, CGSizeZero)) {
-        return ;
+        return;
     }
+        
+    // 判断是否存在 圆角层
+    CSSShapeLayer *borderRadiusLayer = nil;
+    BOOL hasCornerMask = NO;
+    if (self.layer.mask && [self.layer.mask isKindOfClass:[CSSShapeLayer class]]) {
+        borderRadiusLayer = self.layer.mask;
+        hasCornerMask = [self.layer.mask path] != NULL;
+    }
+    
+    // 判断是否存在 clipPath 层
+    BOOL hasClipPathMask = NO;
+    if (self.layer.mask && [self.layer.mask isKindOfClass:[CSSClipPathLayer class]]) {
+        hasClipPathMask = YES;
+    }
+    
     if (self.image && _css_maskLinearGradient.length) {
-        if (!self.layer.mask) {
-            CSSGradientLayer *maskLayer = [[CSSGradientLayer alloc] initWithLayer:nil cssGradient:_css_maskLinearGradient];
-            self.layer.mask = maskLayer;
+        // 清空 mask
+        self.layer.mask = nil;
+        
+        // 创建 CSSGradientLayer层 承载渐变色
+        CSSGradientLayer *gradientLayer = [[CSSGradientLayer alloc] initWithLayer:nil cssGradient:_css_maskLinearGradient];
+        gradientLayer.frame = self.bounds;
+        
+                
+        // 组合 渐变色层 + Borderradius/clipPath 对应的Layer
+        if (hasClipPathMask || hasCornerMask) {
+            CALayer *combinedMaskLayer = [CALayer layer];
+            combinedMaskLayer.frame = self.bounds;
+            [combinedMaskLayer addSublayer:gradientLayer];
+            
+            if (hasClipPathMask) {
+                CSSClipPathLayer *clipPathLayer = [[CSSClipPathLayer alloc] initWithClipPath:self.css_clipPath hostView:self];
+                clipPathLayer.frame = self.bounds;
+                combinedMaskLayer.mask = clipPathLayer;
+            } else {
+                combinedMaskLayer.mask = borderRadiusLayer;
+            }
+            
+            self.layer.mask = combinedMaskLayer;
+        } else {
+            self.layer.mask = gradientLayer;
         }
-        self.layer.mask.frame = self.bounds;
+        
         [self.layer.mask layoutSublayers];
     } else {
         if (self.layer.mask) {
+            if (self.layer.mask && !hasCornerMask && !hasClipPathMask) {
+                self.layer.mask = nil;
+            }
+        }
+    }
+
+}
+
+#if TARGET_OS_OSX
+
+/// macOS 专用：将渐变遮罩与形状裁剪（borderRadius/clipPath）合成为单一位图 mask
+/// 解决 macOS 上 layer.mask 不支持嵌套的问题
+- (void)p_syncMaskLinearGradientIfNeed_macOS {
+    // 1. 尺寸为零时直接返回
+    if (CGSizeEqualToSize(self.frame.size, CGSizeZero)) {
+        return;
+    }
+    
+    // 2. 获取当前的形状路径（clipPath 优先，否则 borderRadius）
+    CGPathRef shapePath = NULL;
+    BOOL hasShapeMask = NO;
+    
+    if (self.css_clipPath.length > 0) {
+        // 使用 clipPath
+        CGFloat density = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+        NSBezierPath *clipBezierPath = [KRConvertUtil hr_parseClipPath:self.css_clipPath density:density];
+        if (clipBezierPath) {
+            shapePath = [KRConvertUtil hr_convertNSBezierPathToCGPath:clipBezierPath];
+            hasShapeMask = (shapePath != nil);
+        }
+    } else if (self.css_borderRadius.length > 0) {
+        // 使用 borderRadius
+        CSSBorderRadius *borderRadius = [[CSSBorderRadius alloc] initWithCSSBorderRadius:self.css_borderRadius];
+        // 检查是否有有效圆角
+        if (!(borderRadius.topLeftCornerRadius < 0.0001 &&
+              borderRadius.topRightCornerRadius < 0.0001 &&
+              borderRadius.bottomLeftCornerRadius < 0.0001 &&
+              borderRadius.bottomRightCornerRadius < 0.0001)) {
+            NSBezierPath *radiusPath = [KRConvertUtil hr_bezierPathWithRoundedRect:self.bounds
+                                                               topLeftCornerRadius:borderRadius.topLeftCornerRadius
+                                                              topRightCornerRadius:borderRadius.topRightCornerRadius
+                                                            bottomLeftCornerRadius:borderRadius.bottomLeftCornerRadius
+                                                           bottomRightCornerRadius:borderRadius.bottomRightCornerRadius];
+            if (radiusPath) {
+                shapePath = [KRConvertUtil hr_convertNSBezierPathToCGPath:radiusPath];
+                hasShapeMask = (shapePath != nil);
+            }
+        }
+    }
+    
+    // 3. 判断是否需要渐变遮罩
+    BOOL hasGradientMask = (self.image && _css_maskLinearGradient.length > 0);
+    
+    // 4. 根据组合情况处理
+    if (hasGradientMask) {
+        // 需要渐变遮罩
+        if (hasShapeMask && shapePath) {
+            // 情况 A：同时有渐变 + 形状 -> 合成位图 mask
+            CALayer *bitmapMask = [self p_createCombinedMaskLayerWithGradient:_css_maskLinearGradient
+                                                                    shapePath:shapePath];
+            self.layer.mask = bitmapMask;
+        } else {
+            // 情况 B：只有渐变，无形状 -> 直接用 CSSGradientLayer
+            CSSGradientLayer *gradientLayer = [[CSSGradientLayer alloc] initWithLayer:nil cssGradient:_css_maskLinearGradient];
+            gradientLayer.frame = self.bounds;
+            self.layer.mask = gradientLayer;
+            [gradientLayer setNeedsLayout];
+        }
+    } else {
+        // 无渐变遮罩
+        if (hasShapeMask) {
+            // 情况 C：只有形状 -> 用 CAShapeLayer
+            if (self.css_clipPath.length > 0) {
+                CSSClipPathLayer *clipLayer = [[CSSClipPathLayer alloc] initWithClipPath:self.css_clipPath hostView:self];
+                clipLayer.frame = self.bounds;
+                self.layer.mask = clipLayer;
+            } else {
+                CSSBorderRadius *borderRadius = [[CSSBorderRadius alloc] initWithCSSBorderRadius:self.css_borderRadius];
+                CSSShapeLayer *shapeLayer = [[CSSShapeLayer alloc] initWithBorderRadius:borderRadius];
+                shapeLayer.frame = self.bounds;
+                shapeLayer.contentsScale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+                self.layer.mask = shapeLayer;
+            }
+        } else {
+            // 情况 D：无任何 mask
             self.layer.mask = nil;
         }
     }
+    
+    // 5. 清理
+    if (shapePath) {
+        CFRelease(shapePath);
+    }
+    
+    [self.layer.mask layoutSublayers];
 }
+
+/// 创建合成的位图 mask（渐变 alpha × 形状裁剪）
+/// @param gradientStr 渐变字符串（如 "linear-gradient(180,#ffffff00 0,#ffffffff 1)"）
+/// @param shapePath 形状路径（borderRadius 或 clipPath 对应的 CGPath）
+/// @return 设置了位图 contents 的 CALayer，可直接作为 layer.mask
+- (CALayer *)p_createCombinedMaskLayerWithGradient:(NSString *)gradientStr shapePath:(CGPathRef)shapePath {
+    CGSize size = self.bounds.size;
+    CGFloat scale = self.window.backingScaleFactor;
+    if (scale < 1.0) {
+        scale = [NSScreen mainScreen].backingScaleFactor ?: 1.0;
+    }
+    
+    NSInteger widthPx = (NSInteger)ceil(size.width * scale);
+    NSInteger heightPx = (NSInteger)ceil(size.height * scale);
+    
+    if (widthPx <= 0 || heightPx <= 0) {
+        return nil;
+    }
+    
+    // 1. 创建位图上下文（带 alpha 通道）
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(NULL,
+                                             widthPx,
+                                             heightPx,
+                                             8,
+                                             widthPx * 4,
+                                             colorSpace,
+                                             kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRelease(colorSpace);
+    
+    if (!ctx) {
+        return nil;
+    }
+    
+    // 2. 调整坐标系：从左下角原点 Y 向上 → 左上角原点 Y 向下（与 CALayer 一致）
+    //    同时缩放到 point 单位
+    CGContextTranslateCTM(ctx, 0, heightPx);
+    CGContextScaleCTM(ctx, scale, -scale);
+    
+    // 3. 用形状路径作为剪切区域
+    if (shapePath) {
+        CGContextAddPath(ctx, shapePath);
+        CGContextClip(ctx);
+    }
+    
+    // 4. 手动绘制渐变（不依赖 CSSGradientLayer.layoutSublayers，因为离屏时 superlayer 为 nil）
+    [KRConvertUtil hr_drawLinearGradientInContext:ctx withGradientStr:gradientStr size:size];
+    
+    // 5. 生成 CGImage
+    CGImageRef maskImage = CGBitmapContextCreateImage(ctx);
+    CGContextRelease(ctx);
+    
+    if (!maskImage) {
+        return nil;
+    }
+    
+    // 6. 创建 CALayer 作为 mask
+    CALayer *maskLayer = [CALayer layer];
+    maskLayer.frame = self.bounds;
+    maskLayer.contentsScale = scale;
+    maskLayer.contents = (__bridge id)maskImage;
+    
+    CGImageRelease(maskImage);
+    
+    return maskLayer;
+    
+}
+
+#endif // TARGET_OS_OSX
+
+
 
 
 -(void)p_fireLoadSuccessEventWithImage:(UIImage *)image {
@@ -313,6 +646,15 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
     }
 }
 
+-(void)p_fireLoadFailureEventWithErrorCode:(NSInteger)errorCode {
+    if (_css_loadFailure) {
+        NSDictionary *params = @{
+            @"src": self.css_src ?: @"",
+            @"errorCode": @(errorCode)
+        };
+        _css_loadFailure(params);
+    }
+}
 
 - (void)p_updateWithImage:(UIImage *)image {
     if(self.css_capInsets != nil && image){
@@ -325,7 +667,11 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
             
             if(top > 0 || left > 0 || bottom > 0 || right >0){
                 UIEdgeInsets insets = UIEdgeInsetsMake(top, left, bottom, right);
+#if !TARGET_OS_OSX // [macOS]
                 image = [image resizableImageWithCapInsets:insets resizingMode:(UIImageResizingModeStretch)];
+#else // [macOS
+                image = UIImageResizableImageWithCapInsets(image, insets, UIImageResizingModeStretch);
+#endif // macOS]
             }
         }
     }else if ([self.css_dotNineImage boolValue] && image) {
@@ -333,12 +679,28 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
         CGFloat imageHeight = image.size.height;
         UIEdgeInsets insets = UIEdgeInsetsMake(imageHeight * 0.5, imageWidth * 0.5,
                                                imageHeight * 0.5 - 1, imageWidth * 0.5 - 1);
+#if !TARGET_OS_OSX // [macOS]
         image = [image resizableImageWithCapInsets:insets resizingMode:(UIImageResizingModeStretch)];
+#else // [macOS
+        image = UIImageResizableImageWithCapInsets(image, insets, UIImageResizingModeStretch);
+#endif // macOS]
     }
     if (image && [self.css_tintColor length]) {
-        UIColor *tintColor = [KRConvertUtil UIColor:self.css_tintColor];
+        UIColor *tintColor = [UIView css_color:self.css_tintColor];
         UIImage *tintedImage = [image kr_tintedImageWithColor:tintColor];
         [self superSetImage:tintedImage];
+    } else if (image && [self.css_colorFilter length]) { // 颜色滤镜
+        NSString *cssColorFilter = self.css_colorFilter;
+        NSString *src = [self.css_src copy];
+        KR_WEAK_SELF
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            UIImage *colorFilterImage = [image kr_applyColorFilterWithColorMatrix:cssColorFilter];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if ([weakSelf.css_src isEqualToString:src] && weakSelf.css_colorFilter == cssColorFilter) {
+                    [weakSelf superSetImage:colorFilterImage];
+                }
+            });
+        });
     } else if (image && [self.css_blurRadius floatValue]) {
         CGFloat blurRadius = [self.css_blurRadius floatValue];
         NSString *src = [self.css_src copy];
@@ -356,6 +718,81 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
     }
 }
 
+// 图片加载结果回调处理
+- (BOOL)p_handleImageLoadCompletion:(NSError *)error url:(NSString *)url imageURL:(NSURL *)imageURL {
+    // src一致性判断
+    if (![self p_srcMatch:url imageURL:imageURL]) {
+        return NO;
+    }
+    // 错误处理
+    if (error) {
+        if (self.css_loadFailure) {
+            [self p_fireLoadFailureEventWithErrorCode:error.code];
+        } else {
+            self.pendingLoadFailure = true;
+            self.errorCode = error.code;
+        }
+        return NO;
+    }
+    // 加载成功，允许设置图片
+    return YES;
+}
+
+// 图片 src 一致性判断
+- (BOOL)p_srcMatch:(NSString *)src imageURL:(NSURL *)imageURL {
+    if (!src.length || !imageURL) {
+        return NO;
+    }
+       
+    NSString *url = imageURL.absoluteString;
+    if (!url.length) {
+        return NO;
+    }
+        
+    // 网络URL 走完全匹配
+    if ([url isEqualToString:src]) {
+        return YES;
+    }
+        
+    // 本地资源 取src和url 最后一个"/"之后的内容，两侧都做 URL 百分号解码后再比较
+    // 统一对两侧解码后比较，确保所有图片加载路径下中文/特殊字符均能正确匹配
+    NSString *srcFileName = [self p_fileNameFromPath:src];
+    NSString *urlFileName = [self p_fileNameFromPath:url];
+    NSString *srcFileNameDecoded = [srcFileName stringByRemovingPercentEncoding] ?: srcFileName;
+    NSString *urlFileNameDecoded = [urlFileName stringByRemovingPercentEncoding] ?: urlFileName;
+    return srcFileNameDecoded.length && urlFileNameDecoded.length && [srcFileNameDecoded isEqualToString:urlFileNameDecoded];
+}
+
+// 提取src路径中的文件名
+- (NSString *)p_fileNameFromPath:(NSString *)path {
+    if (!path.length) {
+        return @"";
+    }
+        
+    // 使用系统 API 获取文件名
+    NSString *fileName = path.lastPathComponent;
+    return fileName.length > 0 ? fileName : @"";
+}
+
+// 新增方法
+- (void)p_decrementImageLoadingCount {
+    if (self.imageLoadingCount > 0) {
+        self.imageLoadingCount--;
+    }
+    if (self.imageLoadingCount == 0) {
+        self.kr_reuseDisable = NO;
+    }
+}
+
+#pragma mark Coordinate System
+// 新增方法
+// Match iOS UIImageView coordinate system (Y-axis pointing down, origin at top-left)
+// This ensures clipPath and other mask operations work correctly with the iOS-style path data
+#if TARGET_OS_OSX
+- (BOOL)isFlipped {
+    return YES;
+}
+#endif
 
 
 - (void)dealloc {
@@ -395,6 +832,7 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
 
 - (void)setHr_rootView:(KuiklyRenderView *)hr_rootView {
     _imageView.hr_rootView = hr_rootView;
+    _placeholderView.hr_rootView = hr_rootView;
 }
 
 #pragma mark - KuiklyRenderViewExportProtocol
@@ -436,6 +874,7 @@ typedef  void (^KRSetImageBlock) (UIImage *_Nullable image);
         if (_css_placeholder.length) {
             _placeholderView = [[KRImageView alloc] initWithFrame:self.bounds];
             _placeholderView.contentMode = _imageView.contentMode;
+            _placeholderView.hr_rootView = _imageView.hr_rootView;
             _placeholderView.css_src = css_placeholder;
             [self insertSubview:_placeholderView atIndex:0];
         } else {

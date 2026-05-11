@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,24 +16,42 @@
 package com.tencent.kuikly.demo.pages.demo
 
 import com.tencent.kuikly.core.annotations.Page
-import com.tencent.kuikly.core.base.*
-import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
+import com.tencent.kuikly.core.base.Animation
+import com.tencent.kuikly.core.base.Color
+import com.tencent.kuikly.core.base.ComposeEvent
+import com.tencent.kuikly.core.base.Translate
+import com.tencent.kuikly.core.base.ViewBuilder
+import com.tencent.kuikly.core.base.ViewRef
+import com.tencent.kuikly.core.log.KLog
+import com.tencent.kuikly.core.reactive.handler.observable
 import com.tencent.kuikly.core.timer.setTimeout
-import com.tencent.kuikly.core.views.*
+import com.tencent.kuikly.core.utils.PlatformUtils
+import com.tencent.kuikly.core.views.Image
+import com.tencent.kuikly.core.views.Input
+import com.tencent.kuikly.core.views.InputView
+import com.tencent.kuikly.core.views.KeyboardParams
+import com.tencent.kuikly.core.views.List
+import com.tencent.kuikly.core.views.Text
+import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
-import com.tencent.kuikly.demo.pages.base.Utils
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
-import com.tencent.kuikly.core.reactive.handler.*
+
 @Page("InputViewDemoPage")
 internal class InputViewDemoPage : BasePager() {
-    lateinit var inputRef : ViewRef<InputView>
-    var keyboardHeight : Float by observable(0f)
+    lateinit var inputRef: ViewRef<InputView>
+    var keyboardHeight: Float by observable(0f)
+    var keyboardAnimation: Animation by observable(Animation.easeInOut(0.25f))
+
+    // Latest cursor index read via `cursorIndex { ... }`. Rendered in the demo
+    // panel below so you can visually verify that the async callback fired.
+    // `-1` means "not yet queried".
+    var lastCursorIndex: Int by observable(-1)
+
     override fun body(): ViewBuilder {
         val ctx = this
         return {
             attr {
                 backgroundColor(Color(0xFF3c6cbdL))
-
             }
             // 背景图
             Image {
@@ -54,19 +72,6 @@ internal class InputViewDemoPage : BasePager() {
                     flex(1f)
                 }
 
-//                View {
-//                    attr {
-//                        height(200f)
-//                        backgroundColor(Color.YELLOW)
-//                    }
-//                }
-//                View {
-//                    attr {
-//                        height(200f)
-//                        backgroundColor(Color.RED)
-//                    }
-//                }
-
                 List {
                     attr {
                         height(200f)
@@ -78,12 +83,18 @@ internal class InputViewDemoPage : BasePager() {
                             height(200f)
                             backgroundColor(Color.BLACK)
                         }
+                        event {
+                            click { ctx.inputRef.view?.blur() }
+                        }
                     }
 
                     View {
                         attr {
                             height(200f)
                             backgroundColor(Color.GREEN)
+                        }
+                        event {
+                            click { ctx.inputRef.view?.blur() }
                         }
                     }
 
@@ -100,47 +111,132 @@ internal class InputViewDemoPage : BasePager() {
                             fontSize(30f)
                             fontWeightBold()
 
-                          //  keyboardTypeNumber()
-                           // textAlignCenter()
+                            //  keyboardTypeNumber()
+                            // textAlignCenter()
                             returnKeyTypeNext()
-                            placeholder("我是placehooder")
+                            placeholder("我是placeholder")
                             placeholderColor(Color.YELLOW)
 
                             color(Color.BLACK)
                             autofocus(true)
                             backgroundColor(Color.RED)
+                            // Drive the caret/cursor color. On H5 / mini-program this is
+                            // translated to the CSS `caret-color` declaration on the
+                            // underlying <input>; on iOS/Android it maps to the native
+                            // text-field tint. Picking YELLOW here makes the caret clearly
+                            // distinguishable against the RED background above.
+                            tintColor(Color.YELLOW)
 
                             transform(Translate(0f, -ctx.keyboardHeight / 200f))
-                            animation(Animation.easeIn(0.3f), ctx.keyboardHeight)
+                            animation(ctx.keyboardAnimation, ctx.keyboardHeight)
                         }
 
                         event {
                             textDidChange {
-                                Utils.logToNative(pagerId, "test_textDidChange" + it.toString())
+                                KLog.i("InputViewDemoPage", "textDidChange$it")
                             }
 
                             inputBlur {
-                                Utils.logToNative(pagerId, "test_inputBlur" + it.toString())
+                                KLog.i("InputViewDemoPage", "inputBlur$it")
                             }
 
                             inputFocus {
-                                Utils.logToNative(pagerId, "test_inputFocus" + it.toString())
+                                KLog.i("InputViewDemoPage", "inputFocus$it")
                             }
 
                             keyboardHeightChange {
-                                val height = it.height
-                                Utils.logToNative(pagerId, "test_keyboardHeightChange" + it.toString())
-                                ctx.keyboardHeight = height
+                                KLog.i("InputViewDemoPage", "keyboardHeightChange: height=${it.height}, duration=${it.duration}, curve=${it.curve}")
+                                ctx.keyboardAnimation = this@InputViewDemoPage.createKeyboardAnimation(it)
+                                ctx.keyboardHeight = it.height
+                            }
+
+                            inputReturn {
+                                KLog.i("InputViewDemoPage", "inputReturn$it")
+                            }
+
+                            textLengthBeyondLimit {
+                                // Triggered when the user tries to type/paste a character
+                                // that would exceed `maxTextLength(20)` set above. The
+                                // payload carries the current (already-capped) text.
+                                KLog.i("InputViewDemoPage", "textLengthBeyondLimit$it")
+                            }
+                        }
+                    }
+
+                    // --- cursorIndex / setCursorIndex demo panel ---------------------------
+                    // Two tappable rows plus a readout label. Tap "Get cursor" to ask the
+                    // input for its caret position (async callback), tap "Set cursor -> 3"
+                    // to programmatically move the caret to offset 3. The result of the
+                    // latest read is rendered to the right as "cursor=N".
+                    View {
+                        attr {
+                            height(60f)
+                            backgroundColor(Color(0xFF222222L))
+                            flexDirectionRow()
+                            allCenter()
+                        }
+                        event {
+                            // Ask the native/H5/miniApp layer for the current cursor
+                            // offset. The callback is invoked asynchronously with the
+                            // resolved Int; we stash it into `lastCursorIndex` so the
+                            // label on the right re-renders.
+                            click {
+                                ctx.inputRef.view?.cursorIndex { idx ->
+                                    KLog.i("InputViewDemoPage", "cursorIndex callback: $idx")
+                                    ctx.lastCursorIndex = idx
+                                }
+                            }
+                        }
+                        Text {
+                            attr {
+                                text("Get cursor")
+                                fontSize(16f)
+                                color(Color.WHITE)
+                                marginRight(16f)
+                            }
+                        }
+                        Text {
+                            attr {
+                                text("cursor=${if (ctx.lastCursorIndex < 0) "?" else ctx.lastCursorIndex.toString()}")
+                                fontSize(16f)
+                                color(Color.YELLOW)
                             }
                         }
                     }
 
                     View {
                         attr {
+                            height(60f)
+                            backgroundColor(Color(0xFF444444L))
+                            allCenter()
+                        }
+                        event {
+                            // Programmatically move the caret. `setCursorIndex` focuses
+                            // the input if needed (iOS/Android/H5/miniApp all share this
+                            // behavior via the underlying platform impl).
+                            click {
+                                ctx.inputRef.view?.setCursorIndex(3)
+                                KLog.i("InputViewDemoPage", "setCursorIndex(3) invoked")
+                            }
+                        }
+                        Text {
+                            attr {
+                                text("Set cursor -> 3")
+                                fontSize(16f)
+                                color(Color.WHITE)
+                            }
+                        }
+                    }
+                    // --- end cursorIndex / setCursorIndex demo panel -----------------------
+
+                    View {
+                        attr {
                             height(200f)
                             backgroundColor(Color.BLACK)
-
                             allCenter()
+                        }
+                        event {
+                            click { ctx.inputRef.view?.blur() }
                         }
                     }
 
@@ -149,10 +245,12 @@ internal class InputViewDemoPage : BasePager() {
                             height(200f)
                             backgroundColor(Color.GREEN)
                         }
+                        event {
+                            click { ctx.inputRef.view?.blur() }
+                        }
                     }
 
                 }
-
 
             }
         }
@@ -169,8 +267,19 @@ internal class InputViewDemoPage : BasePager() {
             val inputView = inputRef.view!!
             inputView.setText("")
             inputView.blur()
+        }
+    }
 
-
+    /**
+     * Create keyboard animation based on platform.
+     * iOS: Use native keyboard animation curve for perfect sync
+     * Other platforms: Use easeInOut animation as fallback
+     */
+    private fun createKeyboardAnimation(params: KeyboardParams): Animation {
+        return if (PlatformUtils.isIOS()) {
+            Animation.keyboard(params.duration, params.curve)
+        } else {
+            Animation.easeInOut(params.duration)
         }
     }
 }

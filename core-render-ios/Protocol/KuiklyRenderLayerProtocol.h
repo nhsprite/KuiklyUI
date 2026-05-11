@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,9 +16,9 @@
 #ifndef KuiklyRenderLayerProtocol_h
 #define KuiklyRenderLayerProtocol_h
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewExportProtocol.h"
-#import <TDFCommon/TDFModuleProtocol.h>
+#import "TDFModuleProtocol.h"
 #import "KuiklyContextParam.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -71,6 +71,12 @@ NS_ASSUME_NONNULL_BEGIN
  * @param propValue 属性值
  */
 - (void)setPropWithTag:(NSNumber *)tag propKey:(NSString *)propKey propValue:(id)propValue;
+/*
+ * @brief 向shadow内注入ContextParam
+ * @param shadow shadow实例
+ */
+- (void)setContextParamToShadow:(id<KuiklyRenderShadowProtocol>)shadow;
+
 /*
  * @brief 设置view对应的shadow对象
  * @param tag 对应的视图索引id
@@ -193,6 +199,11 @@ NS_ASSUME_NONNULL_BEGIN
  * @brief 收到手势响应时调用
  */
 - (void)didHitTest;
+
+/**
+ * @brief 额外缓存内容（用于TurboDisplay传递给Kotlin侧pageData）
+ */
+- (NSString * _Nullable)extraCacheContent;
 
 @end
 

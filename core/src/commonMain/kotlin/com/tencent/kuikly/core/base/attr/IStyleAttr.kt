@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,6 +27,7 @@ import com.tencent.kuikly.core.base.Rotate
 import com.tencent.kuikly.core.base.Scale
 import com.tencent.kuikly.core.base.Translate
 import com.tencent.kuikly.core.base.Skew
+import com.tencent.kuikly.core.views.PathApi
 
 /**
  * 样式属性接口，用于设置视图的样式属性。
@@ -57,7 +58,6 @@ interface IStyleAttr {
      * @return 返回 IStyleAttr 接口以支持链式调用。
      */
     fun backgroundLinearGradient(direction: Direction, vararg colorStops: ColorStop): IStyleAttr
-
 
     /**
      * 设置视图的阴影。
@@ -172,7 +172,11 @@ interface IStyleAttr {
      */
     fun turboDisplayAutoUpdateEnable(enable: Boolean): IStyleAttr
 
-
+    /**
+     * 设置视图的裁剪路径。
+     * @param builder 裁剪路径构建器函数，接收 ContextApi、宽度和高度作为参数。
+     */
+    fun clipPath(builder: ClipPathBuilder?)
     // endregion
 }
 
@@ -197,3 +201,5 @@ enum class AccessibilityRole(val roleName: String) {
     /** 表示视图是一个复选框 */
     CHECKBOX("checkbox")
 }
+
+typealias ClipPathBuilder = PathApi.(width: Float, height: Float) -> Unit

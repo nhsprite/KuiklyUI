@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,16 +15,15 @@
 
 package com.tencent.kuikly.core.base
 
-import com.tencent.kuikly.core.base.event.AnimationCompletionParams
 import com.tencent.kuikly.core.base.event.Event
 import com.tencent.kuikly.core.collection.fastArrayListOf
 import com.tencent.kuikly.core.layout.FlexNode
 import com.tencent.kuikly.core.layout.Frame
-import com.tencent.kuikly.core.layout.MutableFrame
+import com.tencent.kuikly.core.manager.PagerManager
 import com.tencent.kuikly.core.module.CallbackFn
 import com.tencent.kuikly.core.module.IModuleAccessor
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
-import com.tencent.kuikly.core.pager.IPager
+import com.tencent.kuikly.core.utils.checkThread
 
 /*
  * View公共基础Api供外部使用
@@ -121,9 +120,11 @@ abstract class AbstractBaseView<A : Attr, E : Event> : BaseObject(), IViewPublic
     }
 
     open fun willInit() {
+        PagerManager.getPagerEventTrace(pagerId)?.onViewWillInit(viewName(), this::class.simpleName, nativeRef)
     }
 
     open fun didInit() {
+        PagerManager.getPagerEventTrace(pagerId)?.onViewDidInit(viewName(), this::class.simpleName, nativeRef)
         if (getPager().debugUIInspector()) {
             injectDebugName()
         }
@@ -172,7 +173,7 @@ abstract class AbstractBaseView<A : Attr, E : Event> : BaseObject(), IViewPublic
     private fun internalCreateEvent(): E {
         val event = createEvent()
         event.init(pagerId,nativeRef)
-        return event;
+        return event
     }
 
     protected fun internalCreateAttr(): A {
@@ -208,7 +209,6 @@ abstract class AbstractBaseView<A : Attr, E : Event> : BaseObject(), IViewPublic
         }
     }
 
-
     protected fun callRenderViewMethod(methodName: String, params: String? = null, callback: CallbackFn? = null) {
         performTaskWhenRenderViewDidLoad {
             renderView?.callMethod(methodName, params, callback)
@@ -216,6 +216,10 @@ abstract class AbstractBaseView<A : Attr, E : Event> : BaseObject(), IViewPublic
     }
 
     companion object {
-        var nativeRefProducer = 0
+        private var nativeRefProducer = 0
+            set(value) {
+                checkThread("View", "create")
+                field = value
+            }
     }
 }

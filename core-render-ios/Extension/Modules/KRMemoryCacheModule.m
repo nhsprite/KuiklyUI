@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,6 +16,7 @@
 #import "KRMemoryCacheModule.h"
 #import "NSObject+KR.h"
 #import "KRImageView.h"
+#import "KRUIKit.h" // [macOS]
 
 extern NSString *const KRImageBase64Prefix;
 extern NSString *const KRImageAssetsPrefix;
@@ -68,7 +69,11 @@ static NSString *const kCacheStateInProgress = @"InProgress";
     if (key && value) {
        self.memoryKeyValueMap[key] = value;
     }
-    
+    [_imageCacheLock lock];
+    if(_imageCache && [_imageCache objectForKey:key]){
+        [_imageCache removeObjectForKey:key];
+    }
+    [_imageCacheLock unlock];
 }
 
 #pragma mark - getter
@@ -90,7 +95,6 @@ static NSString *const kCacheStateInProgress = @"InProgress";
 }
 
 - (NSString*)cacheImage:(UIImage*)image withCachekey:(NSString*)cacheKey callback:(KuiklyRenderCallback)callback{
-    NSString* state = @"Complete";
     NSNumber* errorCode = @(0);
     NSString* errorMsg = @"";
     
@@ -101,9 +105,11 @@ static NSString *const kCacheStateInProgress = @"InProgress";
     errorMsg = @"";
     NSDictionary *result = @{
         @"state": kCacheStateComplete,
-        @"errorCode": @(0),
+        @"errorCode": errorCode,
         @"errorMsg": @"",
-        @"cacheKey": cacheKey
+        @"cacheKey": cacheKey,
+        @"width": @(image.size.width),
+        @"height": @(image.size.height)
     };
     return [result hr_dictionaryToString];
 }
@@ -150,7 +156,7 @@ static NSString *const kCacheStateInProgress = @"InProgress";
             NSRange subRange = NSMakeRange(KRImageAssetsPrefix.length, src.length - KRImageAssetsPrefix.length - fileExtension.length - 1);
             NSString *pathWithoutExtension = [src substringWithRange:subRange];
             KuiklyContextParam *contextParam = ((KuiklyRenderView *)self.hr_rootView).contextParam;
-            url = [contextParam.contextMode urlForFileName:pathWithoutExtension extension:fileExtension];
+            url = [contextParam urlForFileName:pathWithoutExtension extension:fileExtension];
         }
         if([src hasPrefix:KRImageLocalPathPrefix]){
             url = [NSURL URLWithString:src];
@@ -169,6 +175,7 @@ static NSString *const kCacheStateInProgress = @"InProgress";
     KR_WEAK_SELF
     dispatch_async(dispatch_get_main_queue(), ^{
         KRImageView* imageView = [[KRImageView alloc] init];
+        imageView.hr_rootView = self.hr_rootView;
         KR_STRONG_SELF_RETURN_IF_NIL
         
         [strongSelf->_imageCacheLock lock];
@@ -188,14 +195,22 @@ static NSString *const kCacheStateInProgress = @"InProgress";
                     @"state": kCacheStateComplete,
                     @"errorCode": @(0),
                     @"errorMsg": @"",
-                    @"cacheKey": cacheKey
+                    @"cacheKey": cacheKey,
+                    @"width": @(img.size.width),
+                    @"height": @(img.size.height)
                 };
                 callback(result);
             };
         }
         
         [imageView hrv_setPropWithKey:@"loadSuccess" propValue:imageLoadSuccessCB];
-        [imageView hrv_setPropWithKey:@"src" propValue:src];
+        if ([src hasPrefix:KRImageBase64Prefix]) {
+            NSString *cacheKeySrc = [NSString stringWithFormat:@"data:image_Md5_%@", cacheKey];
+            [self setMemoryObjectWithKey:cacheKeySrc value:src];
+            [imageView hrv_setPropWithKey:@"src" propValue:cacheKeySrc];
+        } else {
+            [imageView hrv_setPropWithKey:@"src" propValue:src];
+        }
     });
     
     result = @{
@@ -215,6 +230,10 @@ static NSString *const kCacheStateInProgress = @"InProgress";
 }
 
 - (void)dealloc {
+    // 显式清空 memoryKeyValueMap，确保 toImage 的 cacheKey 缓存被及时释放
+    [_memoryKeyValueMap removeAllObjects];
+    _memoryKeyValueMap = nil;
+    
     NSDictionary* cache = _imageCache;
     _imageCache = nil;
     dispatch_async(dispatch_get_main_queue(), ^{

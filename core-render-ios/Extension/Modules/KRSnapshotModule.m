@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -57,7 +57,7 @@
     NSString *cacheFilePath = [self generateSnapshotFilePathWithCacheKey:cacheKey];
     NSError *error = nil;
     [[NSFileManager defaultManager] removeItemAtPath:cacheFilePath error:&error];
-    BOOL success = [imageData writeToFile:cacheFilePath atomically:YES];
+    __unused BOOL success = [imageData writeToFile:cacheFilePath atomically:YES];
 #if DEBUG
     assert(success);
 #endif

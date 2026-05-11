@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -24,7 +24,7 @@ import com.tencent.kuikly.core.views.Text
 import com.tencent.kuikly.core.views.View
 import com.tencent.kuikly.demo.pages.base.BasePager
 import com.tencent.kuikly.demo.pages.demo.base.NavBar
-import com.tencent.kuikly.core.reactive.handler.*
+
 @Page("TextViewDemoPage")
 internal class TextViewDemoPage : BasePager() {
     override fun body(): ViewBuilder {
@@ -54,25 +54,26 @@ internal class TextViewDemoPage : BasePager() {
                 View {
                     attr {
                         margin(10f)
-                        height(9f)
-                        width(38f)
+                        height(300f)
+                        width(310f)
                         borderRadius(4.5f)
                         backgroundColor(Color.BLACK)
                         allCenter()
                     }
-                    Text {
+                    Text   {
                         attr {
-                            fontSize(8f)
+                            fontSize(60f)
+                            backgroundColor(Color.GRAY)
                             color(Color.WHITE)
-                            fontFamily("EurostileNextPro-SemiBold")
-                            text("39:40")
+                            lines(3)
+                            textOverFlowTail()
+                            text("奇变偶不变符号看象限\n\n\n")
                         }
                     }
                 }
 
             }
         }
-
 
     }
 }

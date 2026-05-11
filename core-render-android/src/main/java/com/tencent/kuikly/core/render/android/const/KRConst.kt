@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -60,6 +60,9 @@ object KRCssConst {
     const val FRAME = "frame"
     const val Z_INDEX = "zIndex"
     const val PAN = "pan"
+    
+    const val PREVENT_TOUCH = "preventTouch"
+    const val CONSUME_TOUCH_DOWN = "consumeDown"
 
     const val ANIMATION = "animation"
     const val ANIMATION_QUEUE = "animationQueue"
@@ -75,6 +78,7 @@ object KRCssConst {
     const val HAD_SET_FRAME = "hadSetFrame"
 
     const val ACCESSIBILITY = "accessibility"
+    const val ACCESSIBILITY_INFO = "accessibilityInfo"
     const val ACCESSIBILITY_ROLE = "accessibilityRole"
 
     // 同 Attr.StyleConst.DEBUG_NAME
@@ -85,4 +89,8 @@ object KRCssConst {
     const val USE_OUTLINE = "useOutline"
 
     const val HAD_INIT_ACCESSIBILITY_DELEGATE = "hadInitAccessibilityDelegate"
+
+    const val CLIP_PATH = "clipPath"
+    const val TRANSFORM_OVER_BOUNDS = "transformOverBounds"
+    const val CONTENT_OVER_BOUNDS = "contentOverBounds"
 }

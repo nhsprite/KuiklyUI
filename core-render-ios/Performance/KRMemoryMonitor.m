@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -31,8 +31,8 @@
     if (self = [super init]) {
         _pageName = pageName;
         _preLoadMemory = [self memoryUsage];
-        _appAvgMemory = 0;
-        _appPeakMemory = 0;
+        _appAvgMemory = _preLoadMemory;
+        _appPeakMemory = _preLoadMemory;
         _recordCount = 0;
     }
     return self;

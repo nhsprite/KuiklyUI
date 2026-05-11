@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,17 +16,17 @@
 package com.tencent.kuikly.core.base
 
 import com.tencent.kuikly.core.base.attr.AccessibilityRole
+import com.tencent.kuikly.core.base.attr.ClipPathBuilder
 import com.tencent.kuikly.core.base.attr.ILayoutAttr
 import com.tencent.kuikly.core.base.attr.IStyleAttr
+import com.tencent.kuikly.core.collection.fastHashMapOf
+import com.tencent.kuikly.core.collection.fastLinkedMapOf
 import com.tencent.kuikly.core.collection.toFastMap
 import com.tencent.kuikly.core.exception.throwRuntimeError
 import com.tencent.kuikly.core.layout.FlexAlign
-import com.tencent.kuikly.core.layout.FlexDirection
-import com.tencent.kuikly.core.layout.FlexJustifyContent
 import com.tencent.kuikly.core.layout.FlexLayout
 import com.tencent.kuikly.core.layout.FlexNode
 import com.tencent.kuikly.core.layout.FlexPositionType
-import com.tencent.kuikly.core.layout.FlexWrap
 import com.tencent.kuikly.core.layout.Frame
 import com.tencent.kuikly.core.layout.StyleSpace
 import com.tencent.kuikly.core.layout.undefined
@@ -35,16 +35,41 @@ import com.tencent.kuikly.core.manager.PagerManager
 import com.tencent.kuikly.core.utils.ConvertUtil
 import kotlin.math.max
 
+/**
+ * 鼠标光标样式常量 (macOS)
+ * KuiklyDSL: attr { cursor(CursorType.POINTER) }
+ * ComposeDSL: Modifier.cursor(CursorType.POINTER)
+ */
+object CursorType {
+    /** 手指（可点击） */
+    const val POINTER = "pointer"
+    /** 文本选择（I-beam） */
+    const val TEXT = "text"
+    /** 十字准心 */
+    const val CROSSHAIR = "crosshair"
+    /** 抓手（可拖拽） */
+    const val GRAB = "grab"
+    /** 抓取中 */
+    const val GRABBING = "grabbing"
+    /** 禁止操作 */
+    const val NOT_ALLOWED = "not-allowed"
+    /** 默认箭头 */
+    const val DEFAULT = "default"
+}
+
 open class Attr : Props(), IStyleAttr, ILayoutAttr {
     var flexNode: FlexNode? = null
     var keepAlive: Boolean = false
     internal var isStaticAttr = true
-    private var animationMap: HashMap<String, Animation>? = null
+    private var animationMap: MutableMap<String, Animation>? = null
     internal var isBeginApplyAttrProperty = false
-    internal var propSetByFrameTasks: LinkedHashMap<String, FrameTask>? = null
+    internal var propSetByFrameTasks: MutableMap<String, FrameTask>? = null
+    private var clipPathHandler: ClipPathHandler? = null
 
     override fun viewDidRemove() {
         super.viewDidRemove()
+        clipPathHandler?.destroy()
+        clipPathHandler = null
         flexNode = null
         animationMap?.clear()
         propSetByFrameTasks?.clear()
@@ -77,7 +102,7 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
                 getPager().onLayoutView()
             }
             setProp(StyleConst.ANIMATION, "")
-            getPager().animationManager?.didEndAnmation(nativeRef)
+            getPager().animationManager?.didEndAnimation(nativeRef)
         }
     }
     open fun onViewLayoutFrameDidChanged(view: DeclarativeBaseView<*, *>) {
@@ -99,7 +124,7 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
             frameTask(flexNode?.layoutFrame ?: Frame.zero)
         }
         if (propSetByFrameTasks == null) {
-            propSetByFrameTasks = linkedMapOf()
+            propSetByFrameTasks = fastLinkedMapOf()
         }
         propSetByFrameTasks?.set(taskKey, frameTask)
     }
@@ -206,12 +231,34 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
     }
 
     override fun boxShadow(boxShadow: BoxShadow): Attr {
+        BoxShadow.ensureSupportFill(this)
+        StyleConst.BOX_SHADOW with boxShadow.toString()
+        return this
+    }
+    /**
+     * 这个方法用于设置盒子阴影属性。
+     * @param boxShadow 定义盒子阴影特性的 {@link BoxShadow} 对象。
+     * @param useShadowPath 一个布尔值，表示是否使用显式阴影路径(默认值为 false)。
+     * 这是特定于 iOS 的，可以用于优化阴影渲染性能，一般情况下建议设置为true，
+     * @return 当前 {@link Attr} 实例。
+     * */
+    fun boxShadow(boxShadow: BoxShadow, useShadowPath: Boolean = false): Attr {
+        BoxShadow.ensureSupportFill(this)
+        if (useShadowPath) {
+            StyleConst.USE_SHADOW_PATH with useShadowPath.toInt()
+        }
         StyleConst.BOX_SHADOW with boxShadow.toString()
         return this
     }
 
+
     override fun borderRadius(borderRadius: BorderRectRadius): Attr {
         StyleConst.BORDER_RADIUS with borderRadius.toString()
+        return this
+    }
+
+    fun alignContent(flexAlign: FlexAlign): Attr {
+        flexNode?.alignContent = flexAlign
         return this
     }
 
@@ -264,9 +311,18 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         return this
     }
 
+    /**
+     * 设置鼠标光标样式 (macOS)
+     * @param type 光标类型，使用 [CursorType] 常量，如 CursorType.POINTER、CursorType.TEXT 等
+     */
+    fun cursor(type: String): Attr {
+        "cursor" with type
+        return this
+    }
+
     override fun animation(animation: Animation, value: Any): Attr {
         if (animationMap == null) {
-            animationMap = hashMapOf()
+            animationMap = fastHashMapOf()
         }
         val observablePropertyKey = PagerManager.getCurrentReactiveObserver().currentObservablePropertyKey ?: ""
         if (observablePropertyKey.isEmpty()) {
@@ -286,7 +342,6 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
             throwRuntimeError("不支持新旧动画接口同时存在（animation、animate），请统一切换到新的动画接口")
             return this
         }
-
 
         if (getPager().animationManager == null) {
             getPager().animationManager = AnimationManager()
@@ -345,11 +400,11 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
                 val percentageX = translate.percentageX + ConvertUtil.toIntegerPxOfDpValue(translate.offsetX) / max(ConvertUtil.toIntegerPxOfDpValue(it.width), 0.01f)
                 val percentageY = translate.percentageY + ConvertUtil.toIntegerPxOfDpValue(translate.offsetY) / max(ConvertUtil.toIntegerPxOfDpValue(it.height), 0.01f)
                 val translateOffset = Translate(percentageX, percentageY)
-                StyleConst.TRANSFORM with "$rotate|$scale|$translateOffset|$anchor|$skew"
+                StyleConst.TRANSFORM with "$rotate|$scale|$translateOffset|$anchor|$skew|${rotate.toRotateXYString()}"
             }
         } else {
             removePropFrameTask(StyleConst.TRANSFORM)
-            StyleConst.TRANSFORM with "$rotate|$scale|$translate|$anchor|$skew"
+            StyleConst.TRANSFORM with "$rotate|$scale|$translate|$anchor|$skew|${rotate.toRotateXYString()}"
         }
         return this
     }
@@ -370,6 +425,15 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         return this
     }
 
+    /**
+     * 补充无障碍节点信息 目前有clickable 和 long clickable
+     * 这些信息用于关键的播报比如"点击两次即可激活"，"点击两次长按即可激活"
+     */
+    fun accessibilityInfo(clickable: Boolean, longClickable: Boolean) {
+        val accessibilityInfo = "${if(clickable) 1 else 0 } ${if(longClickable) 1 else 0}"
+        StyleConst.ACCESSIBILITY_INFO with accessibilityInfo
+    }
+
     // 自动暗黑模式
     /**
      * true（默认值）:
@@ -383,6 +447,16 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         StyleConst.AUTO_DARK_ENABLE with enable.toInt()
         return this
     }
+
+    /**
+     * Sets the interface style for automatic color adaptation. iOS only.
+     * 设置视图的界面样式，用于自动颜色适配。仅在iOS上生效。
+     * @param style The interface style (AUTO, LIGHT, DARK)
+     */
+    fun interfaceStyle(style: InterfaceStyle) {
+        StyleConst.INTERFACE_STYLE with style.value
+    }
+
     /**
      * 设置该view以及其children下视图能否在TurboDisplay首屏中持续更新其属性值
      * @param enable 布尔值，表示是否持续更新其属性值到TurboDisplay首屏，默认true
@@ -393,9 +467,23 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         return this
     }
 
+    override fun clipPath(builder: ClipPathBuilder?) {
+        if (builder == null) {
+            clipPathHandler?.destroy()
+            clipPathHandler = null
+            if (getProp(StyleConst.CLIP_PATH) != null) {
+                StyleConst.CLIP_PATH with ""
+            }
+        } else {
+            val handler = clipPathHandler ?: ClipPathHandler(this).also { clipPathHandler = it }
+            handler.setBuilder(builder)
+            if (getProp(StyleConst.CLIP_PATH) == null) {
+                // put empty string to pass the FlatLayer check
+                StyleConst.CLIP_PATH with ""
+            }
+        }
+    }
     // endregion
-
-
 
     override fun top(top: Float): Attr {
         flexNode?.setStylePosition(FlexLayout.PositionType.POSITION_TOP, top)
@@ -462,7 +550,6 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         }
     }
 
-
     fun positionAbsolute(): Attr {
         positionType(FlexPositionType.ABSOLUTE)
         return this
@@ -490,7 +577,6 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         if (!right.valueEquals(Float.undefined)) right(right = right)
         return this
     }
-
 
     override fun alignSelf(alignSelf: FlexAlign): Attr {
         flexNode?.alignSelf = alignSelf
@@ -577,7 +663,20 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         this.keepAlive = keepAlive
     }
 
+    fun preventTouch(enable: Boolean) {
+        StyleConst.PREVENT_TOUCH with enable
+    }
+
+    fun consumeTouchDown(enable: Boolean) {
+        StyleConst.CONSUME_DOWN with enable
+    }
+
+    fun superTouch(enable: Boolean) {
+        StyleConst.SUPER_TOUCH with enable
+    }
+
     object StyleConst {
+        const val ACCESSIBILITY_INFO = "accessibilityInfo"
         const val BACKGROUND_COLOR = "backgroundColor"
 
         // border
@@ -587,6 +686,7 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         const val BORDER_RADIUS = "borderRadius"
 
         const val BOX_SHADOW = "boxShadow"
+        const val USE_SHADOW_PATH = "useShadowPath"
 
         // view
         const val VISIBILITY = "visibility"
@@ -596,21 +696,30 @@ open class Attr : Props(), IStyleAttr, ILayoutAttr {
         const val OVERFLOW = "overflow"
         const val BACKGROUND_IMAGE = "backgroundImage"
         const val ANIMATION = "animation"
+        const val LAZY_ANIMATION_KEY = "lazyAnimationKey"
         const val ZINDEX = "zIndex"
         const val USE_OUTLINE = "useOutline"
         const val ACCESSIBILITY = "accessibility"
         const val ACCESSIBILITY_ROLE = "accessibilityRole"
         const val WRAPPER_BOX_SHADOW_VIEW = "wrapperBoxShadowView" // only for ios
         const val AUTO_DARK_ENABLE = "autoDarkEnable"
+        const val INTERFACE_STYLE = "interfaceStyle"
         const val TURBO_DISPLAY_AUTO_UPDATE_ENABLE = "turboDisplayAutoUpdateEnable"
-
+        const val CLIP_PATH = "clipPath"
         // 设置属性用作 UI-Inspector 中的视图名称
         const val DEBUG_NAME = "debugName"
+        const val PREVENT_TOUCH = "preventTouch"
+        const val CONSUME_DOWN = "consumeDown"
+        const val SUPER_TOUCH = "superTouch"
+        
+        // glass effect
+        const val GLASS_EFFECT_ENABLE = "glassEffectEnable"
+        const val GLASS_EFFECT_INTERACTIVE = "glassEffectInteractive"
+        const val GLASS_EFFECT_TINT_COLOR = "glassEffectTintColor"
+        const val GLASS_EFFECT_STYLE = "glassEffectStyle"
+        const val GLASS_EFFECT_SPACING = "glassEffectSpacing"
     }
 }
-
-typealias NumberString = Any?
-
 
 enum class Direction(value: Int) {
     TO_TOP(0),
@@ -623,7 +732,7 @@ enum class Direction(value: Int) {
     TO_BOTTOM_RIGHT(7),
 }
 
-class ColorStop(private val color: Color, private val stopIn01: Float) {
+class ColorStop(val color: Color, val stopIn01: Float) {
     override fun toString(): String {
         return "$color $stopIn01"
     }
@@ -647,30 +756,65 @@ enum class BorderStyle(val value: String) {
 }
 
 class Border(
-    private val lineWidth: Float,
-    private val lineStyle: BorderStyle,
-    private val color: Color
+    val lineWidth: Float,
+    val lineStyle: BorderStyle,
+    val color: Color
 ) {
     override fun toString(): String {
         return "$lineWidth ${lineStyle.value} $color"
     }
 }
 
-
 class BoxShadow(
     private val offsetX: Float,
     private val offsetY: Float,
     private val shadowRadius: Float,
-    private val shadowColor: Color
+    private val shadowColor: Color,
+    private val fill: Boolean = true
 ) {
+    @Deprecated("deprecated", level = DeprecationLevel.HIDDEN)
+    constructor(offsetX: Float, offsetY: Float, shadowRadius: Float, shadowColor: Color) : this(
+        offsetX,
+        offsetY,
+        shadowRadius,
+        shadowColor,
+        true
+    )
+
     override fun toString(): String {
-        return "$offsetX $offsetY $shadowRadius $shadowColor"
+        // earlier render-android requires fixed params length,
+        // check supportFill for backward compatibility
+        return if (supportFill == true) {
+            "$offsetX $offsetY $shadowRadius $shadowColor ${if (fill) 1 else 0}"
+        } else {
+            "$offsetX $offsetY $shadowRadius $shadowColor"
+        }
+    }
+
+    internal companion object {
+        private var supportFill: Boolean? = null
+        fun ensureSupportFill(scope: PagerScope) {
+            if (supportFill == null) {
+                supportFill = scope.getPager().pageData.hasFeature("box_shadow_fill")
+            }
+        }
     }
 }
 
+/**
+ * 旋转类
+ * 支持2d和3d旋转
+ */
 class Rotate(
-    private val angle: Float // range of [-360, 360]
+    private val angle: Float = 0f, // 围绕z轴旋转,属于2d平面旋转（range of [-360, 360]）
+    private val xAngle: Float = 0f, //  围绕x轴旋转xAngle角度 属于3d旋转 （range of [-360, 360]）
+    private val yAngle: Float = 0f // 围绕y轴旋转yAngle角度 属于3d旋转 （range of [-360, 360]）
 ) {
+    @Deprecated("Deprecated", level = DeprecationLevel.HIDDEN)
+    constructor(angle: Float) : this(angle, 0f, 0f)
+
+    // 是否为3d旋转
+    val is3d: Boolean get() = xAngle != 0f || yAngle != 0f
 
     companion object {
         val DEFAULT: Rotate = Rotate(0f)
@@ -679,6 +823,11 @@ class Rotate(
     override fun toString(): String {
         return "$angle"
     }
+
+    fun toRotateXYString(): String {
+        return "$xAngle $yAngle"
+    }
+
 }
 
 class Scale(
@@ -723,8 +872,8 @@ class Translate(
   请注意，当您将元素倾斜 90 度时，元素将会变得无法看见，因为它的宽度或高度将会变为 0。
  */
 class Skew(
-    private val horizontalSkewAngle: Float = 0f,  // 水平方向倾斜角度(deg) range of [-360,360]，单位角度
-    private val verticalSkewAngle: Float = 0f  // 垂直方向倾斜角度(deg) range of [-360,360]，单位角度
+    private val horizontalSkewAngle: Float = 0f,  // 水平方向倾斜角度(deg) range of (-90, 90)，单位角度
+    private val verticalSkewAngle: Float = 0f  // 垂直方向倾斜角度(deg) range of (-90, 90)，单位角度
 ) {
 
     companion object {
@@ -764,7 +913,7 @@ class Percentage(private val number100: Float) {
 /*
 * 用于表示矩形边缘的内边距。它包含四个浮点值，分别表示顶部、左侧、底部和右侧的内边距。
  */
-class EdgeInsets(val top: Float, val left: Float, val bottom: Float, val right: Float) {
+data class EdgeInsets(val top: Float, val left: Float, val bottom: Float, val right: Float) {
     override fun toString(): String {
         return "$top $left $bottom $right"
     }
@@ -783,3 +932,14 @@ class EdgeInsets(val top: Float, val left: Float, val bottom: Float, val right: 
     }
 }
 
+/**
+ * Interface style options for automatic color adaptation.
+ */
+enum class InterfaceStyle(val value: String) {
+    /** Automatically adapt to system theme */
+    AUTO("auto"),
+    /** Force light mode */
+    LIGHT("light"),
+    /** Force dark mode */
+    DARK("dark")
+}

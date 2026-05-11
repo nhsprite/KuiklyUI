@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -72,8 +72,8 @@ internal class RVScrollConflictHandler(private val context: Context) {
 
     private fun processDownEvent(e: MotionEvent, actionIndex: Int) {
         scrollPointerId = e.getPointerId(actionIndex)
-        initialTouchX = (e.x + 0.5f).toInt()
-        initialTouchY = (e.y + 0.5f).toInt()
+        initialTouchX = (e.getX(actionIndex) + 0.5f).toInt()
+        initialTouchY = (e.getY(actionIndex) + 0.5f).toInt()
     }
 
     private fun processMoveEvent(recyclerView: RecyclerView, e: MotionEvent): Boolean {
@@ -97,7 +97,6 @@ internal class RVScrollConflictHandler(private val context: Context) {
             if (canScrollVertically && abs(dy) > touchSlop && abs(dy) > abs(dx)) {
                 startScroll = true
             }
-
             return !startScroll
         }
         return false
@@ -107,8 +106,8 @@ internal class RVScrollConflictHandler(private val context: Context) {
         if (event.getPointerId(activeIndex) == scrollPointerId) {
             val newIndex = if (activeIndex == 0) 1 else 0
             scrollPointerId = event.getPointerId(newIndex)
-            initialTouchX = (event.x + 0.5f).toInt()
-            initialTouchY = (event.y + 0.5f).toInt()
+            initialTouchX = (event.getX(newIndex) + 0.5f).toInt()
+            initialTouchY = (event.getY(newIndex) + 0.5f).toInt()
         }
     }
 }

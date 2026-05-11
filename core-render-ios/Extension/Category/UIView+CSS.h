@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,9 +13,10 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "UIView+CSSDebug.h"
 #import "KuiklyRenderViewExportProtocol.h"
+#include <QuartzCore/QuartzCore.h>
 
 #define KR_SCROLL_INDEX  @"scrollIndex"
 
@@ -23,7 +24,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface UIView (CSS)
+@interface UIView (CSS) <KuiklyRenderViewLifyCycleProtocol>
 
 @property (nonatomic, strong, nullable) NSNumber *css_visibility;
 @property (nonatomic, strong, nullable) NSNumber *css_opacity;
@@ -32,6 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) NSNumber *css_touchEnable;
 @property (nonatomic, strong, nullable) NSString *css_transform;
 @property (nonatomic, strong, nullable) NSString *css_backgroundImage;
+@property (nonatomic, strong, nullable) NSNumber *css_useShadowPath;
 @property (nonatomic, strong, nullable) NSString *css_boxShadow;
 @property (nonatomic, strong, nullable) NSString *css_borderRadius;
 @property (nonatomic, strong, nullable) NSString *css_border;
@@ -44,6 +46,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) NSNumber *css_autoDarkEnable;
 @property (nonatomic, strong, nullable) NSNumber *css_scrollIndex;
 @property (nonatomic, strong, nullable) NSNumber *css_turboDisplayAutoUpdateEnable;
+@property (nonatomic, strong, nullable) NSNumber *css_shouldRasterize;
+@property (nonatomic, strong, nullable) NSString *css_lazyAnimationKey;
+@property (nonatomic, strong, nullable) NSString *css_clipPath;
+@property (nonatomic, strong, nullable) CAShapeLayer *css_clipPathLayer;
+#if TARGET_OS_OSX
+@property (nonatomic, strong, nullable) NSString *css_cursor;
+#endif
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_click;
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_doubleClick;
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_longPress;
@@ -51,6 +60,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_animationCompletion;
 /// 在列表中是否可以允许滑动
 @property (nonatomic, assign) BOOL kr_canCancelInScrollView;
+/// 是否禁止复用
+@property (nonatomic, assign) BOOL kr_reuseDisable;
+/// View的Wrapper，部分情况下需要外层包裹KRView，比如boxShadowView等
+@property (nonatomic, strong, nullable) UIView *kr_commonWrapperView;
 
 + (NSString *_Nullable)css_string:(id)value;
 + (BOOL)css_bool:(id)value;
@@ -63,6 +76,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)css_onClickTapWithSender:(UIGestureRecognizer *)sender;
 - (void)css_onDoubleClickWithSender:(UIGestureRecognizer *)sender;
 - (void)css_onLongPressWithSender:(UILongPressGestureRecognizer *)sender;
+- (CGPoint)kr_convertLocalPointToRenderRoot:(CGPoint)point;
 @end
 
 // ***  CSSGrientLayer  ** //
@@ -80,6 +94,35 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) UIColor *shadowColor;
 
 - (instancetype)initWithCSSBoxShadow:(NSString *)boxShadow;
+
+@end
+
+// ***  CSSBorderRadius  ** //
+@interface CSSBorderRadius : NSObject
+
+@property(nonatomic, assign) CGFloat topLeftCornerRadius;
+@property(nonatomic, assign) CGFloat topRightCornerRadius;
+@property(nonatomic, assign) CGFloat bottomLeftCornerRadius;
+@property(nonatomic, assign) CGFloat bottomRightCornerRadius;
+
+- (instancetype)initWithCSSBorderRadius:(NSString *)cssBorderRadius;
+- (BOOL)isSameBorderCornerRaidus;
+
+@end
+
+// ***  CAShapeLayer  ** //
+@interface CSSShapeLayer : CAShapeLayer
+
+- (instancetype)initWithBorderRadius:(CSSBorderRadius *)borderRadius;
+
+@end
+
+@interface CSSClipPathLayer : CAShapeLayer
+
+@property (nonatomic, copy) NSString *clipPathData;
+@property (nonatomic, weak) UIView *hostView;
+
+- (instancetype)initWithClipPath:(NSString *)clipPath hostView:(UIView *)hostView;
 
 @end
 

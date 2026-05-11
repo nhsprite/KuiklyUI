@@ -3,10 +3,15 @@ pluginManagement {
         google()
         gradlePluginPortal()
         mavenCentral()
+        maven {
+            url = uri("https://mirrors.tencent.com/repository/maven-tencent/")
+        }
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/gradle-plugins/")
+        }
     }
 }
 
-rootProject.name = "KuiklyUI"
 rootProject.buildFileName = "build.1.6.21.gradle.kts"
 
 val buildFileName = "build.1.6.21.gradle.kts"

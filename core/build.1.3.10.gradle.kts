@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("maven-publish")
+    signing
 }
 
 group = MavenConfig.GROUP
@@ -37,6 +38,8 @@ afterEvaluate {
 //            tasks.named("publishReleasePublicationToMavenRepository").configure {
 //                dependsOn("bundleReleaseAar")
 //            }
+//            signPublicationIfKeyPresent(project)
+//            pom.configureMavenCentralMetadata()
         }
     }
 
@@ -73,7 +76,10 @@ android {
 //    }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions.freeCompilerArgs += listOf("-Xmulti-platform")
+        kotlinOptions.freeCompilerArgs += listOf(
+            "-Xmulti-platform",
+            "-module-name", "${project.group}.${project.name}"
+        )
     }
 
     val fileDir = rootProject.rootDir.absolutePath + "/core/src"

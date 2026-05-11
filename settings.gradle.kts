@@ -3,16 +3,46 @@ pluginManagement {
         google()
         gradlePluginPortal()
         mavenCentral()
+        maven {
+            url = uri("https://mirrors.tencent.com/repository/maven-tencent/")
+        }
+        maven {
+            url = uri("https://mirrors.tencent.com/nexus/repository/gradle-plugins/")
+        }
     }
 }
 
-rootProject.name = "KuiklyUI"
+val buildFileName = "build.2.1.21.gradle.kts"
+
+include(":androidApp")
+include(":demo")
 
 include(":core-annotations")
+project(":core-annotations").buildFileName = buildFileName
+
 include(":core-ksp")
+project(":core-ksp").buildFileName = buildFileName
 
 include(":core")
-include(":core-render-android")
-include(":demo")
-include(":androidApp")
+project(":core").buildFileName = buildFileName
 
+include(":core-wx")
+project(":core-wx").buildFileName = buildFileName
+
+include(":core-render-android")
+project(":core-render-android").buildFileName = buildFileName
+
+include(":core-render-web:base")
+include(":core-render-web:h5")
+include(":core-render-web:miniapp")
+
+include(":h5App")
+project(":h5App").buildFileName = buildFileName
+include(":miniApp")
+project(":miniApp").buildFileName = buildFileName
+
+
+include(":compose")
+project(":compose").buildFileName = buildFileName
+
+rootProject.buildFileName = buildFileName

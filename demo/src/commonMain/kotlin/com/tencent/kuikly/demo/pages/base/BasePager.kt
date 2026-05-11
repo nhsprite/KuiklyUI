@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -72,7 +72,6 @@ internal abstract class BasePager : Pager() {
         isNightMode()
     }
 
-
     override fun themeDidChanged(data: JSONObject) {
         super.themeDidChanged(data)
         nightModel = data.optBoolean(IS_NIGHT_MODE_KEY)
@@ -100,14 +99,4 @@ internal abstract class BasePager : Pager() {
         const val IS_NIGHT_MODE_KEY = "isNightMode"
     }
 
-
 }
-/*
- * 页面显示所处状态
- */
-internal enum class ECPageShowState {
-    LOADING, // loading态
-    SUCCESS, // 成功态
-    ERROR   // 失败态
-}
-

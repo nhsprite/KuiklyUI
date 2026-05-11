@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#import <UIKit/UIKit.h>
+#import "KRUIKit.h" // [macOS]
 #import "KuiklyRenderViewExportProtocol.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * @brief This is a container view component exposed for Kotlin side to call
  */
-@interface KRView : UIView<KuiklyRenderViewExportProtocol>
+@interface KRView : KRUIView<KuiklyRenderViewExportProtocol> // [macOS]
 
 // The touch down callback for the view
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_touchDown;
@@ -31,6 +31,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 // The touch move callback for the view
 @property (nonatomic, strong, nullable) KuiklyRenderCallback css_touchMove;
+
+#if TARGET_OS_OSX
+// macOS: Mouse hover enter callback
+@property (nonatomic, strong, nullable) KuiklyRenderCallback css_mouseEnter;
+
+// macOS: Mouse hover exit callback
+@property (nonatomic, strong, nullable) KuiklyRenderCallback css_mouseExit;
+#endif
 
 @end
 

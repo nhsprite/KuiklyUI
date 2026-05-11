@@ -1,7 +1,7 @@
 /*
  * Tencent is pleased to support the open source community by making KuiklyUI
  * available.
- * Copyright (C) 2025 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2025 Tencent. All rights reserved.
  * Licensed under the License of KuiklyUI;
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -86,12 +86,18 @@ internal class NestedHorizontalChildInterceptor(recyclerView: KRRecyclerView) : 
 
     private fun processDownEvent(e: MotionEvent, actionIndex: Int) {
         scrollPointerId = e.getPointerId(actionIndex)
-        initialTouchX = (e.x + 0.5f).toInt()
-        initialTouchY = (e.y + 0.5f).toInt()
+        initialTouchX = (e.getX(actionIndex) + 0.5f).toInt()
+        initialTouchY = (e.getY(actionIndex) + 0.5f).toInt()
     }
 
     private fun processMoveEvent(e: MotionEvent): Boolean {
         val recyclerView = recyclerViewWeakRef.get() ?: return false
+
+        // 如果禁用了父组件滑动联动，则拦截事件，滑动事件完全由子组件处理
+        if (!recyclerView.isScrollWithParent()) {
+            return true
+        }
+
         val index = e.findPointerIndex(scrollPointerId)
         if (index < 0) {
             return false
@@ -128,8 +134,8 @@ internal class NestedHorizontalChildInterceptor(recyclerView: KRRecyclerView) : 
         if (event.getPointerId(activeIndex) == scrollPointerId) {
             val newIndex = if (activeIndex == 0) 1 else 0
             scrollPointerId = event.getPointerId(newIndex)
-            initialTouchX = (event.x + 0.5f).toInt()
-            initialTouchY = (event.y + 0.5f).toInt()
+            initialTouchX = (event.getX(newIndex) + 0.5f).toInt()
+            initialTouchY = (event.getY(newIndex) + 0.5f).toInt()
         }
     }
 }
